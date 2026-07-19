@@ -18,8 +18,6 @@ BASE = "https://lichess.org/api"
 # 4xx statuses that mean "no such player" (404 unknown, 400/410 malformed)
 NOT_FOUND = {400, 404, 410}
 
-_EXPORT_LOCK = asyncio.Lock()
-
 # lichess status values that mean the game was drawn regardless of `winner`
 _DRAW_STATUSES = {"draw", "stalemate"}
 _TERMINATION = {"mate": "checkmated", "resign": "resigned", "outoftime": "timeout", "timeout": "abandoned"}
