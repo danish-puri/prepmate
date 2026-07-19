@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrepMate · Performance</title>
+<link rel="icon" type="image/jpeg" href="assets/logov2_prepmate.jpeg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;800;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0F0A;
+    --panel: #0E140E;
+    --panel-2: #101810;
+    --hairline: #1D2B1F;
+    --track: #16211A;
+    --text: #E8F5E9;
+    --body: #C9DECC;
+    --muted: #8FAE95;
+    --dim: #7E9C84;
+    --faint: #5C7562;
+    --phosphor: #3DF07C;
+    --red: #FF6B61;
+    --red-fill: #A03B33;
+    --draw-fill: #37413A;
+    --mated-fill: #4A5A4E;
+    --series-green: #23904C;
+    --series-cyan: #3390C9;
+    --series-amber: #BC841B;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Archivo', sans-serif;
+    min-height: 100vh;
+  }
+
+  .loading { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--faint); padding: 24px 0; }
+  .err { color: var(--red); }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 56px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .wordmark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.12em;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .wordmark svg { filter: drop-shadow(0 0 6px rgba(61, 240, 124, 0.6)); }
+  .nav-right { display: flex; align-items: center; gap: 20px; }
+  .nav-link {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--phosphor);
+    text-decoration: none;
+    border: 1px solid var(--phosphor);
+    border-radius: 2px;
+    padding: 9px 16px;
+    box-shadow: 0 0 10px rgba(61, 240, 124, 0.25);
+  }
+  .nav-link:hover { box-shadow: 0 0 18px rgba(61, 240, 124, 0.45); }
+
+  .player {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 44px 56px 24px;
+    flex-wrap: wrap;
+  }
+  .name-block { display: flex; flex-direction: column; gap: 12px; }
+  .kicker { font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.14em; color: var(--muted); }
+  .name-row { display: flex; align-items: center; gap: 16px; }
+  .name-row h1 { font-weight: 900; font-size: 44px; letter-spacing: -0.02em; line-height: 48px; }
+  .title-chip {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--bg);
+    background: var(--phosphor);
+    border-radius: 2px;
+    padding: 4px 10px;
+    box-shadow: 0 0 14px rgba(61, 240, 124, 0.4);
+  }
+  .meta { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--muted); }
+  .chips { display: flex; gap: 12px; flex-wrap: wrap; }
+  .chip {
+    width: 176px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 18px;
+    background: var(--panel-2);
+    border: 1px solid var(--hairline);
+    border-radius: 3px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .chip .label { font-size: 11px; letter-spacing: 0.1em; color: var(--muted); }
+  .chip .value { font-weight: 600; font-size: 24px; color: var(--text); }
+  .chip .sub { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+
+  section { padding: 36px 56px 8px; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .section-head h3 { font-weight: 800; font-size: 18px; letter-spacing: 0.02em; }
+  .section-head .hint { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); }
+
+  .two-col { display: flex; gap: 56px; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 480px; }
+
+  .split-col-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    padding-bottom: 18px;
+  }
+  .tc-row { margin-bottom: 18px; }
+  .tc-row.reference { opacity: 0.55; }
+  .tc-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: 'IBM Plex Mono', monospace;
+    padding-bottom: 7px;
+  }
+  .tc-label .tc { font-size: 12px; color: var(--body); }
+  .tc-label .n { font-size: 11px; color: var(--dim); }
+  .wdl { display: flex; gap: 2px; height: 20px; }
+  .seg {
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    border-radius: 2px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 11px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .seg.w { background: var(--series-green); color: #EAF7ED; }
+  .seg.d { background: var(--draw-fill); color: var(--body); }
+  .seg.l { background: var(--red-fill); color: #FBEAE8; }
+  .seg.mated { background: var(--mated-fill); color: var(--text); }
+  .seg.hot { box-shadow: 0 0 12px rgba(255, 107, 97, 0.25); }
+  .split-caption { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); padding-top: 14px; }
+
+  .legend { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  .legend .item { display: flex; align-items: center; gap: 7px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--body); }
+  .legend .key { width: 14px; height: 2px; }
+  .chart-wrap { position: relative; padding-top: 20px; overflow-x: auto; }
+  .chart-box { position: relative; width: 1240px; height: 345px; }
+  .tick { position: absolute; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); pointer-events: none; }
+  .end-label {
+    position: absolute;
+    left: 1252px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text);
+    pointer-events: none;
+  }
+  .crosshair {
+    position: absolute;
+    top: 20px;
+    width: 1px;
+    height: 280px;
+    background: rgba(61, 240, 124, 0.4);
+    display: none;
+    pointer-events: none;
+  }
+  .tooltip {
+    position: absolute;
+    display: none;
+    background: var(--panel-2);
+    border: 1px solid var(--hairline);
+    border-radius: 3px;
+    padding: 10px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--body);
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 2;
+  }
+  .tooltip .when { color: var(--dim); padding-bottom: 6px; }
+  .tooltip .tt-row { display: flex; align-items: center; gap: 7px; padding-top: 3px; }
+  .tooltip .swatch { width: 8px; height: 8px; border-radius: 1px; }
+
+  .donut-row {
+    display: flex;
+    gap: 72px;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding-top: 12px;
+  }
+  .donut-group { display: flex; flex-direction: column; padding-top: 24px; }
+  .donut-group-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    text-align: center;
+  }
+  .donut { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .donut-legend {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    padding-top: 20px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--body);
+  }
+  .donut-legend .item { display: flex; align-items: center; gap: 7px; }
+  .donut-legend .dot { width: 10px; height: 10px; border-radius: 2px; }
+
+  .form-strip { display: flex; gap: 4px; flex-wrap: wrap; padding-top: 18px; }
+  .sq {
+    width: 22px; height: 22px;
+    border-radius: 2px;
+    display: grid;
+    place-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+    font-size: 10px;
+  }
+  .sq.w { background: var(--series-green); color: #EAF7ED; }
+  .sq.d { border: 1px solid var(--mated-fill); color: var(--muted); }
+  .sq.l { background: var(--red-fill); color: #FBEAE8; }
+  .sq.latest { box-shadow: 0 0 10px rgba(61, 240, 124, 0.4); }
+
+  footer { padding: 48px 56px; }
+
+  @media (max-width: 1100px) {
+    .nav, .player, section, footer { padding-left: 20px; padding-right: 20px; }
+    .col { min-width: 100%; }
+    .name-row h1 { font-size: 32px; line-height: 36px; }
+  }
+</style>
+</head>
+<body>
+
+  <nav class="nav">
+    <a class="wordmark" href="lookup.html">
+      <img src="assets/logov2_prepmate.jpeg" alt="PrepMate logo, a pixelated glowing knight" height="22" style="width: auto; border-radius: 3px;">
+      PREPMATE
+    </a>
+    <div class="nav-right">
+      <a class="nav-link" id="dossierLink" href="profile.html">FULL DOSSIER →</a>
+    </div>
+  </nav>
+
+  <header class="player">
+    <div class="name-block">
+      <span class="kicker" id="kicker">PERFORMANCE SHEET</span>
+      <div class="name-row">
+        <h1 id="playerName">…</h1>
+        <span class="title-chip" id="titleChip" hidden></span>
+      </div>
+      <span class="meta" id="metaLine">pulling live data…</span>
+    </div>
+    <div class="chips" id="chips"></div>
+  </header>
+
+  <section id="statsSection" hidden>
+    <div class="section-head"><h3>PLAYER STATISTICS</h3><span class="hint" id="statsHint">win / draw / loss share, all rated games in the window. centre shows n</span></div>
+    <div class="donut-row" id="donutRow"></div>
+    <div class="donut-legend">
+      <span class="item"><span class="dot" style="background: var(--series-green)"></span>wins</span>
+      <span class="item"><span class="dot" style="background: var(--draw-fill)"></span>draws</span>
+      <span class="item"><span class="dot" style="background: var(--red-fill)"></span>losses</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h3>COLOUR SPLIT</h3><span class="hint">win / draw / loss share per time control. blitz and faster shown for reference, weighted low for OTB prep</span></div>
+    <div class="two-col" style="padding-top: 24px;" id="splitCols">
+      <p class="loading">pulling game archives, this can take a few seconds on first load…</p>
+    </div>
+  </section>
+
+  <section id="lossSection" hidden>
+    <div class="section-head"><h3>HOW HE LOSES</h3><span class="hint" id="lossHint">by termination</span></div>
+    <div style="padding-top: 20px; max-width: 640px;">
+      <div class="wdl" style="height: 22px;" id="lossBar"></div>
+      <p class="split-caption" id="lossCaption"></p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head" style="justify-content: space-between; display: flex;">
+      <div style="display: flex; align-items: baseline; gap: 14px;">
+        <h3>RATING TRAJECTORY</h3>
+        <span class="hint">lichess history from lichess api. chess.com history reconstructed from game archives</span>
+      </div>
+      <div class="legend" id="chartLegend"></div>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-box" id="chartBox">
+        <p class="loading" id="chartLoading">pulling rating history…</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h3>LAST 20</h3><span class="hint">rated games, all connected platforms, newest last</span></div>
+    <div class="form-strip" id="formStrip"><p class="loading">pulling recent games…</p></div>
+    <p class="split-caption" id="formCaption"></p>
+  </section>
+
+  <footer></footer>
+
+<script>
+  const API = location.protocol === 'file:' ? 'http://127.0.0.1:8000' : '';
+  const qs = new URLSearchParams(location.search);
+  const cc = qs.get('chesscom');
+  const li = qs.get('lichess');
+  const fideId = qs.get('fide');
+  const src = new URLSearchParams();
+  if (cc) src.set('chesscom', cc);
+  if (li) src.set('lichess', li);
+  if (fideId) src.set('fide', fideId);
+
+  const FIDE_TITLES = {
+    'Grandmaster': 'GM', 'International Master': 'IM', 'FIDE Master': 'FM',
+    'Candidate Master': 'CM', 'Woman Grandmaster': 'WGM',
+    'Woman International Master': 'WIM', 'Woman FIDE Master': 'WFM', 'Woman Candidate Master': 'WCM',
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const pct = (x) => Math.round(x) + '%';
+
+  $('dossierLink').href = 'profile.html?' + src.toString();
+
+  function fatal(msg) {
+    document.querySelector('.player').innerHTML =
+      `<div class="name-block"><span class="kicker err">ERROR</span><div class="name-row"><h1>${esc(msg)}</h1></div>` +
+      `<span class="meta"><a href="lookup.html" style="color: var(--phosphor)">← back to lookup</a></span></div>`;
+    document.querySelectorAll('section').forEach(el => el.style.display = 'none');
+  }
+
+  if (!cc && !li && !fideId) fatal('no player selected');
+
+  async function getJSON(path) {
+    const r = await fetch(`${API}${path}`);
+    if (r.status === 404) throw Object.assign(new Error('player not found'), { notFound: true });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+
+  async function loadProfile() {
+    const d = await getJSON(`/api/profile?${src}`);
+    const ccd = d.chesscom || {}, lid = d.lichess || {}, fdd = (d.fide && d.fide.found) ? d.fide : {};
+    const name = fdd.name || ccd.name || ccd.username || lid.username || '?';
+    $('playerName').textContent = name;
+    const title = FIDE_TITLES[fdd.title] || fdd.title || ccd.title || lid.title;
+    if (title) { $('titleChip').textContent = title; $('titleChip').hidden = false; }
+    $('kicker').textContent = 'PERFORMANCE SHEET · ' +
+      [fdd.fide_id && `fide/${fdd.fide_id}`, ccd.found && `chess.com/${ccd.username}`, lid.found && `lichess/${lid.username}`]
+        .filter(Boolean).join(' · ').toUpperCase();
+
+    const metaParts = [];
+    if (fdd.federation) metaParts.push(fdd.federation);
+    else if (ccd.country) metaParts.push(ccd.country);
+    if (fdd.birth_year) metaParts.push('b.' + fdd.birth_year);
+    if (ccd.joined) metaParts.push('on chess.com since ' + new Date(ccd.joined * 1000).getFullYear());
+    if (lid.games_total) metaParts.push(lid.games_total.toLocaleString() + ' lichess rated games');
+    $('metaLine').textContent = metaParts.join(' · ') || 'live data';
+
+    const candidates = [
+      ['FIDE STD', fdd.ratings?.std, 'id ' + (fdd.fide_id || '')],
+      ['FIDE RAPID', fdd.ratings?.rapid, 'id ' + (fdd.fide_id || '')],
+      ['LICHESS RAPID', lid.ratings?.rapid, '@' + (lid.username || '')],
+      ['LICHESS CLASSICAL', lid.ratings?.classical, '@' + (lid.username || '')],
+      ['CHESS.COM RAPID', ccd.ratings?.rapid, '@' + (ccd.username || '')],
+      ['CHESS.COM BLITZ', ccd.ratings?.blitz, '@' + (ccd.username || '')],
+      ['LICHESS BLITZ', lid.ratings?.blitz, '@' + (lid.username || '')],
+      ['CHESS.COM DAILY', ccd.ratings?.daily, '@' + (ccd.username || '')],
+      ['CHESS.COM BULLET', ccd.ratings?.bullet, '@' + (ccd.username || '')],
+      ['LICHESS BULLET', lid.ratings?.bullet, '@' + (lid.username || '')],
+    ].filter(([, r]) => r).slice(0, 3);
+    $('chips').innerHTML = candidates.map(([label, rating, sub]) =>
+      `<div class="chip"><span class="label">${label}</span><span class="value">${rating}</span><span class="sub">${esc(sub)}</span></div>`
+    ).join('');
+    document.title = `PrepMate · ${name} · Performance`;
+  }
+
+  const TC_ORDER = ['rapid', 'classical', 'blitz', 'bullet', 'daily'];
+  const REFERENCE_TC = new Set(['blitz', 'bullet']);
+
+  function tcRow(label, s, reference) {
+    const seg = (cls, letter, p) => p <= 0 ? '' :
+      `<span class="seg ${cls}" style="width:${p}%" title="${letter} ${p}%">${p >= 10 ? `${letter} ${p}` : ''}</span>`;
+    return `<div class="tc-row${reference ? ' reference' : ''}">
+      <div class="tc-label"><span class="tc">${label}</span><span class="n">n=${s.n}</span></div>
+      <div class="wdl">${seg('w', 'W', s.win_pct)}${seg('d', 'D', s.draw_pct)}${seg('l', 'L', s.loss_pct)}</div>
+    </div>`;
+  }
+
+  function toPct(c) {
+    if (!c || !c.n) return null;
+    return { n: c.n, win_pct: Math.round(c.wins / c.n * 100),
+             draw_pct: Math.round(c.draws / c.n * 100), loss_pct: Math.round(c.losses / c.n * 100) };
+  }
+
+  function splitCol(label, colour, split, fideStats) {
+    let rows = '';
+    for (const [tc, fLabel] of [['std', 'FIDE STD'], ['rapid', 'FIDE RAPID'], ['blitz', 'FIDE BLITZ']]) {
+      const p = fideStats && toPct(fideStats[tc]?.[colour]);
+      if (p) rows += tcRow(fLabel, p, tc === 'blitz');
+    }
+    if (split) {
+      for (const tc of TC_ORDER.filter(tc => split[tc])) {
+        rows += tcRow(tc.toUpperCase() + ' (ONLINE)', split[tc], REFERENCE_TC.has(tc));
+      }
+    }
+    return `<div class="col"><div class="split-col-label">${label}</div>${rows || '<p class="loading">no games</p>'}</div>`;
+  }
+
+  function donut(label, t) {
+    if (!t.n) return '';
+    const size = 220, c = size / 2, r = 74, sw = 28;
+    const C = 2 * Math.PI * r;
+    const gap = t.wins && t.draws && t.losses ? 2.5 : 0; // px gaps only between real segments
+    const parts = [
+      [t.wins, 'var(--series-green)', '#EAF7ED'],
+      [t.draws, 'var(--draw-fill)', '#C9DECC'],
+      [t.losses, 'var(--red-fill)', '#FBEAE8'],
+    ].filter(([count]) => count > 0);
+
+    let cum = 0, segs = '', labels = '';
+    for (const [count, fill, ink] of parts) {
+      const frac = count / t.n;
+      const len = Math.max(0, frac * C - gap);
+      segs += `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${fill}" stroke-width="${sw}"` +
+        ` stroke-dasharray="${len.toFixed(1)} ${(C - len).toFixed(1)}" stroke-dashoffset="${(-cum * C - gap / 2).toFixed(1)}"` +
+        ` transform="rotate(-90 ${c} ${c})"/>`;
+      if (frac >= 0.07) {
+        const theta = (cum + frac / 2) * 2 * Math.PI - Math.PI / 2;
+        const x = c + r * Math.cos(theta), y = c + r * Math.sin(theta);
+        labels += `<text x="${x.toFixed(1)}" y="${(y + 3.5).toFixed(1)}" text-anchor="middle"` +
+          ` font-family="IBM Plex Mono, monospace" font-weight="600" font-size="11" fill="${ink}">${(frac * 100).toFixed(1)}%</text>`;
+      }
+      cum += frac;
+    }
+    return `<div class="donut">
+      <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+        ${segs}${labels}
+        <text x="${c}" y="${c - 8}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" letter-spacing="0.14em" fill="#8FAE95">${label}</text>
+        <text x="${c}" y="${c + 18}" text-anchor="middle" font-family="Archivo, sans-serif" font-weight="800" font-size="24" fill="#E8F5E9">${t.n.toLocaleString()}</text>
+      </svg>
+    </div>`;
+  }
+
+  async function loadPerformance() {
+    const d = await getJSON(`/api/performance?${src}`);
+
+    const groups = [];
+    if (d.fide_stats) groups.push(['FIDE OTB · ALL RATED GAMES, LIFETIME', d.fide_stats.all]);
+    if (d.totals && d.totals.total.n)
+      groups.push([`ONLINE · LAST WINDOW, ${d.games_analysed.toLocaleString()} GAMES`, d.totals]);
+    if (groups.length) {
+      $('donutRow').innerHTML = groups.map(([label, t]) =>
+        `<div class="donut-group"><div class="donut-group-label">${label}</div>` +
+        `<div class="donut-row">${donut('WHITE', t.white)}${donut('BLACK', t.black)}${donut('TOTAL', t.total)}</div></div>`
+      ).join('');
+      $('statsHint').textContent = 'win / draw / loss share by colour. centre shows n';
+      $('statsSection').hidden = false;
+    }
+
+    $('splitCols').innerHTML =
+      splitCol('AS WHITE', 'white', d.colour_split?.white, d.fide_stats) +
+      splitCol('AS BLACK', 'black', d.colour_split?.black, d.fide_stats);
+
+    const loss = d.loss_terminations || {};
+    if (loss.n) {
+      const parts = [
+        ['resigned', 'RESIGNS', 'd', false],
+        ['on_time', 'ON TIME', 'l', true],
+        ['checkmated', 'MATED', 'mated', false],
+        ['other', 'OTHER', 'd', false],
+      ].filter(([k]) => loss[k] && loss[k].pct > 0);
+      $('lossBar').innerHTML = parts.map(([k, label, cls, hot]) =>
+        `<span class="seg ${cls}${hot ? ' hot' : ''}" style="width:${loss[k].pct}%" title="${label} ${loss[k].pct}%">${loss[k].pct >= 12 ? `${label} ${loss[k].pct}` : ''}</span>`
+      ).join('');
+      $('lossHint').textContent = `by termination (n=${loss.n})`;
+      $('lossCaption').textContent = parts.map(([k, label]) => `${label.toLowerCase()} ${loss[k].pct}%`).join(' · ');
+      $('lossSection').hidden = false;
+    }
+  }
+
+  const W = 1240, H = 280;
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  async function loadRatings() {
+    const d = await getJSON(`/api/ratings?${src}`);
+    const priority = [
+      ['FIDE STD', d.fide?.std],
+      ['LICHESS RAPID', d.lichess?.rapid],
+      ['LICHESS CLASSICAL', d.lichess?.classical],
+      ['CHESS.COM RAPID', d.chesscom?.rapid],
+      ['CHESS.COM BLITZ', d.chesscom?.blitz],
+      ['LICHESS BLITZ', d.lichess?.blitz],
+      ['FIDE RAPID', d.fide?.rapid],
+      ['FIDE BLITZ', d.fide?.blitz],
+      ['CHESS.COM DAILY', d.chesscom?.daily],
+      ['CHESS.COM BULLET', d.chesscom?.bullet],
+      ['LICHESS BULLET', d.lichess?.bullet],
+    ];
+    const colors = ['#23904C', '#3390C9', '#BC841B'];
+
+    const allDates = priority.flatMap(([, pts]) => (pts || []).map(p => Date.parse(p.date)));
+    if (!allDates.length) { $('chartLoading').textContent = 'no rating history available'; return; }
+    const maxX = Math.max(...allDates);
+    const since = maxX - 3 * 365.25 * 86400e3;
+
+    const series = [];
+    for (const [name, pts] of priority) {
+      if (series.length === 3) break;
+      if (!pts) continue;
+      let kept = pts.map(p => ({ x: Date.parse(p.date), y: p.rating })).filter(p => p.x >= since);
+      if (kept.length < 2) continue;
+      const step = Math.ceil(kept.length / 160);
+      const last = kept[kept.length - 1];
+      kept = kept.filter((_, i) => i % step === 0);
+      if (kept[kept.length - 1].x !== last.x) kept.push(last);
+      series.push({ name, color: colors[series.length], pts: kept });
+    }
+    if (!series.length) { $('chartLoading').textContent = 'not enough rating history in the last 3 years'; return; }
+
+    const minX = Math.min(...series.map(s => s.pts[0].x));
+    const ys = series.flatMap(s => s.pts.map(p => p.y));
+    let lo = Math.floor(Math.min(...ys) / 100) * 100;
+    let hi = Math.ceil(Math.max(...ys) / 100) * 100;
+    if (hi === lo) hi += 100;
+    const mid = Math.round((lo + hi) / 2 / 50) * 50;
+    const px = (x) => (x - minX) / (maxX - minX || 1) * W;
+    const py = (y) => H - (y - lo) / (hi - lo) * H;
+
+    $('chartLegend').innerHTML = series.map(s =>
+      `<span class="item"><span class="key" style="background:${s.color}"></span>${s.name}</span>`).join('');
+
+    const gridY = [lo, mid, hi].map(v => `<line x1="0" y1="${py(v).toFixed(1)}" x2="${W}" y2="${py(v).toFixed(1)}" stroke="#1D2B1F"/>`).join('');
+    const lines = series.map((s, i) =>
+      `<polyline points="${s.pts.map(p => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ')}"` +
+      ` stroke="${s.color}" stroke-width="${i === 0 ? 2.5 : 2}" stroke-linejoin="round" stroke-linecap="round"` +
+      `${i === 0 ? ' style="filter: drop-shadow(0 0 7px rgba(61,240,124,0.45))"' : ''}/>`).join('');
+    const dots = series.map(s => {
+      const p = s.pts[s.pts.length - 1];
+      return `<circle cx="${px(p.x).toFixed(1)}" cy="${py(p.y).toFixed(1)}" r="4.5" fill="${s.color}" stroke="#0A0F0A" stroke-width="2"/>`;
+    }).join('');
+
+    let xTicks = '';
+    for (let y = new Date(minX).getFullYear(); y <= new Date(maxX).getFullYear() + 1; y++) {
+      const t = Date.UTC(y, 0, 1);
+      if (t >= minX && t <= maxX) xTicks += `<span class="tick" style="left:${px(t).toFixed(0)}px; top:${H + 28}px">${y}</span>`;
+    }
+
+    const ends = series.map(s => ({ y: py(s.pts[s.pts.length - 1].y) - 7, v: s.pts[s.pts.length - 1].y }))
+      .sort((a, b) => a.y - b.y);
+    for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 16) ends[i].y = ends[i - 1].y + 16;
+
+    $('chartBox').innerHTML =
+      `<svg id="chart" width="${W}" height="${H + 20}" viewBox="0 0 ${W} ${H + 20}" fill="none" style="overflow: visible;">${gridY}${lines}${dots}</svg>` +
+      `<span class="tick" style="left:4px; top:${py(hi) + 24}px">${hi}</span>` +
+      `<span class="tick" style="left:4px; top:${py(mid) + 24}px">${mid}</span>` +
+      `<span class="tick" style="left:4px; top:${py(lo) + 12}px">${lo}</span>` +
+      xTicks +
+      ends.map(e => `<span class="end-label" style="top:${e.y + 20}px">${e.v}</span>`).join('') +
+      `<div class="crosshair" id="crosshair"></div><div class="tooltip" id="tooltip"></div>`;
+
+    const chart = $('chart'), crosshair = $('crosshair'), tooltip = $('tooltip');
+    chart.addEventListener('mousemove', (e) => {
+      const rect = chart.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      if (x < 0 || x > W) return;
+      const t = minX + x / W * (maxX - minX);
+      const rows = series.map(s => {
+        let best = s.pts[0];
+        for (const p of s.pts) if (Math.abs(p.x - t) < Math.abs(best.x - t)) best = p;
+        return { name: s.name, color: s.color, value: best.y };
+      });
+      const dt = new Date(t);
+      tooltip.innerHTML = `<div class="when">${MONTHS[dt.getMonth()]} ${dt.getFullYear()}</div>` +
+        rows.map(r => `<div class="tt-row"><span class="swatch" style="background:${r.color}"></span>${r.name} <b style="color:var(--text)">${r.value}</b></div>`).join('');
+      crosshair.style.left = x + 'px';
+      crosshair.style.display = 'block';
+      tooltip.style.display = 'block';
+      tooltip.style.left = (x > W - 240 ? x - 210 : x + 14) + 'px';
+      tooltip.style.top = '40px';
+    });
+    chart.addEventListener('mouseleave', () => {
+      crosshair.style.display = 'none';
+      tooltip.style.display = 'none';
+    });
+  }
+
+  async function loadRecent() {
+    const d = await getJSON(`/api/recent?${src}&n=20`);
+    if (!d.n) { $('formStrip').innerHTML = '<p class="loading">no recent rated games</p>'; return; }
+    $('formStrip').innerHTML = d.sequence.map((s, i) => {
+      const cls = s.result === 'win' ? 'w' : s.result === 'draw' ? 'd' : 'l';
+      const latest = i === d.sequence.length - 1 ? ' latest' : '';
+      const tip = `${s.result} · ${s.platform} ${s.time_class}${s.eco ? ' · ' + s.eco : ''}${s.opponent_rating ? ' · opp ' + s.opponent_rating : ''}`;
+      return `<span class="sq ${cls}${latest}" title="${esc(tip)}">${cls.toUpperCase()}</span>`;
+    }).join('');
+    $('formCaption').textContent = `${d.wins}W ${d.draws}D ${d.losses}L over his last ${d.n} rated games.`;
+  }
+
+  if (cc || li) {
+    const guard = (p) => p.catch(err => {
+      if (err.notFound) fatal('player not found');
+      else console.error(err);
+    });
+    guard(loadProfile());
+    guard(loadPerformance());
+    guard(loadRatings());
+    guard(loadRecent());
+  }
+</script>
+</body>
+</html>

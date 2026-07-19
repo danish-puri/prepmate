@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrepMate · Dossier</title>
+<link rel="icon" type="image/jpeg" href="assets/logov2_prepmate.jpeg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;800;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0F0A;
+    --panel: #0E140E;
+    --panel-2: #101810;
+    --hairline: #1D2B1F;
+    --hairline-dim: #141F16;
+    --track: #16211A;
+    --text: #E8F5E9;
+    --body: #C9DECC;
+    --muted: #8FAE95;
+    --dim: #7E9C84;
+    --faint: #5C7562;
+    --phosphor: #3DF07C;
+    --red: #FF6B61;
+    --red-fill: #A03B33;
+    --draw-fill: #37413A;
+    --mated-fill: #4A5A4E;
+    --series-green: #23904C;
+    --series-cyan: #3390C9;
+    --series-amber: #BC841B;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Archivo', sans-serif;
+    min-height: 100vh;
+  }
+
+  .loading { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--faint); padding: 24px 0; }
+  .err { color: var(--red); }
+
+  /* ---- top nav ---- */
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 56px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .wordmark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: 0.12em;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .wordmark svg { filter: drop-shadow(0 0 6px rgba(61, 240, 124, 0.6)); }
+  .nav-right { display: flex; align-items: center; gap: 20px; }
+  .cache { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted); }
+  .refresh {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--phosphor);
+    background: none;
+    border: 1px solid var(--phosphor);
+    border-radius: 2px;
+    padding: 9px 16px;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(61, 240, 124, 0.25);
+  }
+  .refresh:hover { box-shadow: 0 0 18px rgba(61, 240, 124, 0.45); }
+
+  /* ---- player header ---- */
+  .player {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 44px 56px 32px;
+    flex-wrap: wrap;
+  }
+  .name-block { display: flex; flex-direction: column; gap: 12px; }
+  .kicker {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+  }
+  .name-row { display: flex; align-items: center; gap: 16px; }
+  .name-row h1 { font-weight: 900; font-size: 48px; letter-spacing: -0.02em; line-height: 52px; }
+  .title-chip {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--bg);
+    background: var(--phosphor);
+    border-radius: 2px;
+    padding: 4px 10px;
+    box-shadow: 0 0 14px rgba(61, 240, 124, 0.4);
+  }
+  .meta { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--muted); }
+  .chips { display: flex; gap: 12px; flex-wrap: wrap; }
+  .chip {
+    width: 176px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 18px;
+    background: var(--panel-2);
+    border: 1px solid var(--hairline);
+    border-radius: 3px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .chip .label { font-size: 11px; letter-spacing: 0.1em; color: var(--muted); }
+  .chip .value { font-weight: 600; font-size: 24px; color: var(--text); }
+  .chip .sub { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+
+  /* ---- prep target ---- */
+  .prep {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin: 4px 56px 0;
+    padding: 24px 32px;
+    background: rgba(61, 240, 124, 0.06);
+    border: 1px solid var(--phosphor);
+    border-radius: 3px;
+    box-shadow: 0 0 24px rgba(61, 240, 124, 0.18), inset 0 0 32px rgba(61, 240, 124, 0.05);
+    flex-wrap: wrap;
+  }
+  .prep.none { border-color: var(--hairline); background: var(--panel); box-shadow: none; }
+  .prep.none .prep-label { color: var(--muted); }
+  .prep.none .dot { background: var(--muted); box-shadow: none; }
+  .prep-copy { display: flex; flex-direction: column; gap: 8px; }
+  .prep-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    color: var(--phosphor);
+  }
+  .prep-label .dot {
+    width: 8px; height: 8px;
+    background: var(--phosphor);
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(61, 240, 124, 0.9);
+  }
+  .prep h2 { font-weight: 800; font-size: 26px; letter-spacing: -0.01em; }
+  .prep-sub { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--muted); }
+  .ghost-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--phosphor);
+    background: none;
+    border: 1px solid var(--phosphor);
+    border-radius: 2px;
+    padding: 12px 20px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .ghost-btn:hover { box-shadow: 0 0 14px rgba(61, 240, 124, 0.35); }
+
+  /* ---- tabs ---- */
+  .tabbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding: 40px 56px 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .tabs { display: flex; gap: 36px; }
+  .tab {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    background: none;
+    border: none;
+    padding: 0 0 12px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .tab:hover { color: var(--body); }
+  .tab.active {
+    font-weight: 600;
+    color: var(--phosphor);
+    border-bottom-color: var(--phosphor);
+    box-shadow: 0 6px 8px -6px rgba(61, 240, 124, 0.8);
+  }
+  .tc-filter { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted); padding-bottom: 12px; }
+  .tc-filter b { color: var(--text); font-weight: 600; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  section { padding: 40px 56px 8px; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .section-head h3 { font-weight: 800; font-size: 18px; letter-spacing: 0.02em; }
+  .section-head .hint { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); }
+
+  .two-col { display: flex; gap: 56px; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 480px; }
+
+  /* ---- openings tables ---- */
+  .col-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-bottom: 16px;
+  }
+  .col-head h3 { font-weight: 800; font-size: 18px; letter-spacing: 0.02em; }
+  .col-head .n { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted); }
+  .lane-head, .op-row {
+    display: grid;
+    grid-template-columns: 44px 1fr 48px 116px 64px;
+    gap: 12px;
+    align-items: center;
+  }
+  .lane-head {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--hairline);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+  }
+  .op-row { padding: 13px 0; border-bottom: 1px solid var(--hairline-dim); }
+  .op-row .eco { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--muted); }
+  .op-row .op-name { font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 10px; overflow: hidden; }
+  .op-row .op-name .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .op-row .games { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--muted); text-align: right; }
+  .op-row .score { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 13px; text-align: right; }
+  .op-row .score .arrow { font-size: 11px; }
+  .up { color: var(--phosphor); }
+  .down { color: var(--red); }
+  .track { width: 100px; height: 6px; background: var(--track); border-radius: 2px; }
+  .fill { height: 6px; background: var(--series-green); border-radius: 2px; display: block; }
+  .op-row.faded { opacity: 0.4; }
+  .op-row.target { background: rgba(61, 240, 124, 0.07); }
+  .op-row.target .score { color: var(--red); }
+  .target-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--phosphor);
+    border: 1px solid var(--phosphor);
+    border-radius: 2px;
+    padding: 2px 7px;
+    box-shadow: 0 0 8px rgba(61, 240, 124, 0.3);
+    flex-shrink: 0;
+  }
+  .footnote {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    padding: 24px 56px 0;
+  }
+
+  /* ---- readout ---- */
+  .readout-col-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    padding-bottom: 14px;
+  }
+  .note-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--panel);
+    border: 1px solid var(--track);
+    border-radius: 3px;
+    margin-bottom: 14px;
+  }
+  .note-card .sign { width: 30px; flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 13px; }
+  .note-card .claim { flex: 1; font-size: 13.5px; line-height: 20px; color: var(--body); }
+  .note-card .n { flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); }
+
+  /* ---- colour split ---- */
+  .split-col-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    padding-bottom: 18px;
+  }
+  .tc-row { margin-bottom: 18px; }
+  .tc-row.reference { opacity: 0.55; }
+  .tc-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: 'IBM Plex Mono', monospace;
+    padding-bottom: 7px;
+  }
+  .tc-label .tc { font-size: 12px; color: var(--body); }
+  .tc-label .n { font-size: 11px; color: var(--dim); }
+  .wdl { display: flex; gap: 2px; height: 20px; }
+  .seg {
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    border-radius: 2px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 11px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .seg.w { background: var(--series-green); color: #EAF7ED; }
+  .seg.d { background: var(--draw-fill); color: var(--body); }
+  .seg.l { background: var(--red-fill); color: #FBEAE8; }
+  .seg.mated { background: var(--mated-fill); color: var(--text); }
+  .seg.hot { box-shadow: 0 0 12px rgba(255, 107, 97, 0.25); }
+  .split-caption { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); padding-top: 14px; }
+
+  /* ---- ratings chart ---- */
+  .legend { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  .legend .item { display: flex; align-items: center; gap: 7px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--body); }
+  .legend .key { width: 14px; height: 2px; }
+  .chart-wrap { position: relative; padding-top: 20px; overflow-x: auto; }
+  .chart-box { position: relative; width: 1240px; height: 345px; }
+  .tick {
+    position: absolute;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    pointer-events: none;
+  }
+  .end-label {
+    position: absolute;
+    left: 1252px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--text);
+    pointer-events: none;
+  }
+  .crosshair {
+    position: absolute;
+    top: 20px;
+    width: 1px;
+    height: 280px;
+    background: rgba(61, 240, 124, 0.4);
+    display: none;
+    pointer-events: none;
+  }
+  .tooltip {
+    position: absolute;
+    display: none;
+    background: var(--panel-2);
+    border: 1px solid var(--hairline);
+    border-radius: 3px;
+    padding: 10px 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--body);
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 2;
+  }
+  .tooltip .when { color: var(--dim); padding-bottom: 6px; }
+  .tooltip .tt-row { display: flex; align-items: center; gap: 7px; padding-top: 3px; }
+  .tooltip .swatch { width: 8px; height: 8px; border-radius: 1px; }
+
+  /* ---- recent form ---- */
+  .form-strip { display: flex; gap: 4px; flex-wrap: wrap; padding-top: 18px; }
+  .sq {
+    width: 22px; height: 22px;
+    border-radius: 2px;
+    display: grid;
+    place-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+    font-size: 10px;
+  }
+  .sq.w { background: var(--series-green); color: #EAF7ED; }
+  .sq.d { border: 1px solid var(--mated-fill); color: var(--muted); }
+  .sq.l { background: var(--red-fill); color: #FBEAE8; }
+  .sq.latest { box-shadow: 0 0 10px rgba(61, 240, 124, 0.4); }
+
+  footer { padding: 48px 56px; }
+
+  @media (max-width: 1100px) {
+    .nav, .player, .tabbar, section, .footnote, footer { padding-left: 20px; padding-right: 20px; }
+    .prep { margin-left: 20px; margin-right: 20px; }
+    .col { min-width: 100%; }
+    .tabs { gap: 20px; flex-wrap: wrap; }
+    .name-row h1 { font-size: 34px; line-height: 38px; }
+  }
+</style>
+</head>
+<body>
+
+  <nav class="nav">
+    <a class="wordmark" href="lookup.html">
+      <img src="assets/logov2_prepmate.jpeg" alt="PrepMate logo, a pixelated glowing knight" height="22" style="width: auto; border-radius: 3px;">
+      PREPMATE
+    </a>
+    <div class="nav-right">
+      <span class="cache" id="cacheNote">live data</span>
+      <a class="refresh" id="perfLink" href="performance.html" style="text-decoration: none;">PERFORMANCE SHEET</a>
+      <button class="refresh" id="refreshBtn">REFRESH ⟳</button>
+    </div>
+  </nav>
+
+  <header class="player">
+    <div class="name-block">
+      <span class="kicker" id="kicker">OPPONENT DOSSIER</span>
+      <div class="name-row">
+        <h1 id="playerName">…</h1>
+        <span class="title-chip" id="titleChip" hidden></span>
+      </div>
+      <span class="meta" id="metaLine">pulling live data…</span>
+    </div>
+    <div class="chips" id="chips"></div>
+  </header>
+
+  <div class="prep" id="prepBanner">
+    <div class="prep-copy">
+      <span class="prep-label"><span class="dot"></span>PREP TARGET</span>
+      <h2 id="prepTitle">scanning repertoire…</h2>
+      <span class="prep-sub" id="prepSub">weakness = 15+ games scoring 10+ pts under the colour average</span>
+    </div>
+    <button class="ghost-btn" id="prepBtn" hidden>VIEW GAMES →</button>
+  </div>
+
+  <div class="tabbar">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-panel="openings" role="tab">OPENINGS</button>
+      <button class="tab" data-panel="performance" role="tab">PERFORMANCE</button>
+      <button class="tab" data-panel="ratings" role="tab">RATINGS</button>
+      <button class="tab" data-panel="recent" role="tab">RECENT FORM</button>
+    </div>
+    <span class="tc-filter">tc: <b>BLITZ + RAPID + CLASSICAL</b></span>
+  </div>
+
+  <!-- ================= OPENINGS ================= -->
+  <div class="panel active" id="openings">
+    <section>
+      <div class="two-col" id="openingsCols">
+        <p class="loading">pulling game archives, this can take a few seconds on first load…</p>
+      </div>
+    </section>
+    <p class="footnote" id="openingsFootnote" hidden></p>
+    <section id="readoutSection" hidden>
+      <div class="section-head"><h3>READOUT</h3><span class="hint">derived heuristics, not vibes. every claim ships its n</span></div>
+      <div class="two-col" style="padding-top: 20px;">
+        <div class="col">
+          <div class="readout-col-label up">STRENGTHS</div>
+          <div id="strengthCards"></div>
+        </div>
+        <div class="col">
+          <div class="readout-col-label down">WEAKNESSES</div>
+          <div id="weakCards"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= PERFORMANCE ================= -->
+  <div class="panel" id="performance">
+    <section>
+      <div class="section-head"><h3>COLOUR SPLIT</h3><span class="hint">win / draw / loss share per time control. blitz and faster shown for reference, weighted low for OTB prep</span></div>
+      <div class="two-col" style="padding-top: 24px;" id="splitCols">
+        <p class="loading">pulling game archives…</p>
+      </div>
+    </section>
+    <section id="lossSection" hidden>
+      <div class="section-head"><h3>HOW HE LOSES</h3><span class="hint" id="lossHint">by termination</span></div>
+      <div style="padding-top: 20px; max-width: 640px;">
+        <div class="wdl" style="height: 22px;" id="lossBar"></div>
+        <p class="split-caption" id="lossCaption"></p>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= RATINGS ================= -->
+  <div class="panel" id="ratings">
+    <section>
+      <div class="section-head" style="justify-content: space-between; display: flex;">
+        <div style="display: flex; align-items: baseline; gap: 14px;">
+          <h3>RATING TRAJECTORY</h3>
+          <span class="hint" id="ratingsHint">lichess history from lichess api. chess.com history reconstructed from game archives</span>
+        </div>
+        <div class="legend" id="chartLegend"></div>
+      </div>
+      <div class="chart-wrap">
+        <div class="chart-box" id="chartBox">
+          <p class="loading" id="chartLoading">pulling rating history…</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ================= RECENT FORM ================= -->
+  <div class="panel" id="recent">
+    <section>
+      <div class="section-head"><h3>LAST 20</h3><span class="hint">rated games, all connected platforms, newest last</span></div>
+      <div class="form-strip" id="formStrip"><p class="loading">pulling recent games…</p></div>
+      <p class="split-caption" id="formCaption"></p>
+    </section>
+  </div>
+
+  <footer></footer>
+
+<script>
+  const API = location.protocol === 'file:' ? 'http://127.0.0.1:8000' : '';
+  const qs = new URLSearchParams(location.search);
+  const cc = qs.get('chesscom');
+  const li = qs.get('lichess');
+  const fideId = qs.get('fide');
+  const src = new URLSearchParams();
+  if (cc) src.set('chesscom', cc);
+  if (li) src.set('lichess', li);
+  if (fideId) src.set('fide', fideId);
+
+  const FIDE_TITLES = {
+    'Grandmaster': 'GM', 'International Master': 'IM', 'FIDE Master': 'FM',
+    'Candidate Master': 'CM', 'Woman Grandmaster': 'WGM',
+    'Woman International Master': 'WIM', 'Woman FIDE Master': 'WFM', 'Woman Candidate Master': 'WCM',
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const pct = (x) => Math.round(x) + '%';
+
+  // ---- tabs (hash-aware) ----
+  const tabs = document.querySelectorAll('.tab');
+  const panels = document.querySelectorAll('.panel');
+  function activate(name) {
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.panel === name));
+    panels.forEach(p => p.classList.toggle('active', p.id === name));
+  }
+  tabs.forEach(tab => tab.addEventListener('click', () => {
+    activate(tab.dataset.panel);
+    history.replaceState(null, '', '#' + tab.dataset.panel);
+  }));
+  if (['openings', 'performance', 'ratings', 'recent'].includes(location.hash.slice(1))) {
+    activate(location.hash.slice(1));
+  }
+
+  function fatal(msg) {
+    document.querySelector('.player').innerHTML =
+      `<div class="name-block"><span class="kicker err">ERROR</span><div class="name-row"><h1>${esc(msg)}</h1></div>` +
+      `<span class="meta"><a href="lookup.html" style="color: var(--phosphor)">← back to lookup</a></span></div>`;
+    document.querySelectorAll('.prep, .tabbar, .panel').forEach(el => el.style.display = 'none');
+  }
+
+  if (!cc && !li && !fideId) {
+    fatal('no player selected');
+  }
+
+  async function getJSON(path) {
+    const r = await fetch(`${API}${path}`);
+    if (r.status === 404) throw Object.assign(new Error('player not found'), { notFound: true });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+
+  // ---- header ----
+  async function loadProfile() {
+    const d = await getJSON(`/api/profile?${src}`);
+    const ccd = d.chesscom || {}, lid = d.lichess || {}, fdd = (d.fide && d.fide.found) ? d.fide : {};
+    const name = fdd.name || ccd.name || ccd.username || lid.username || '?';
+    $('playerName').textContent = name;
+    const title = FIDE_TITLES[fdd.title] || fdd.title || ccd.title || lid.title;
+    if (title) { $('titleChip').textContent = title; $('titleChip').hidden = false; }
+    $('kicker').textContent = 'OPPONENT DOSSIER · ' +
+      [fdd.fide_id && `fide/${fdd.fide_id}`, ccd.found && `chess.com/${ccd.username}`, lid.found && `lichess/${lid.username}`]
+        .filter(Boolean).join(' · ').toUpperCase();
+
+    const metaParts = [];
+    if (fdd.federation) metaParts.push(fdd.federation);
+    else if (ccd.country) metaParts.push(ccd.country);
+    if (fdd.birth_year) metaParts.push('b.' + fdd.birth_year);
+    if (ccd.joined) metaParts.push('on chess.com since ' + new Date(ccd.joined * 1000).getFullYear());
+    if (lid.games_total) metaParts.push(lid.games_total.toLocaleString() + ' lichess rated games');
+    $('metaLine').dataset.base = metaParts.join(' · ');
+    $('metaLine').textContent = metaParts.join(' · ') || 'live data';
+
+    const candidates = [
+      ['FIDE STD', fdd.ratings?.std, 'id ' + (fdd.fide_id || '')],
+      ['FIDE RAPID', fdd.ratings?.rapid, 'id ' + (fdd.fide_id || '')],
+      ['LICHESS RAPID', lid.ratings?.rapid, '@' + (lid.username || '')],
+      ['LICHESS CLASSICAL', lid.ratings?.classical, '@' + (lid.username || '')],
+      ['CHESS.COM RAPID', ccd.ratings?.rapid, '@' + (ccd.username || '')],
+      ['CHESS.COM BLITZ', ccd.ratings?.blitz, '@' + (ccd.username || '')],
+      ['LICHESS BLITZ', lid.ratings?.blitz, '@' + (lid.username || '')],
+      ['CHESS.COM DAILY', ccd.ratings?.daily, '@' + (ccd.username || '')],
+      ['CHESS.COM BULLET', ccd.ratings?.bullet, '@' + (ccd.username || '')],
+      ['LICHESS BULLET', lid.ratings?.bullet, '@' + (lid.username || '')],
+    ].filter(([, r]) => r).slice(0, 3);
+    $('chips').innerHTML = candidates.map(([label, rating, sub]) =>
+      `<div class="chip"><span class="label">${label}</span><span class="value">${rating}</span><span class="sub">${esc(sub)}</span></div>`
+    ).join('');
+    document.title = `PrepMate · ${name}`;
+  }
+
+  // ---- openings + readout + prep target ----
+  function opRow(r, color, target) {
+    const isTarget = target && target.color === color && target.eco === r.eco;
+    const arrow = r.flag === 'strength' ? '<span class="arrow up">▲</span> '
+                : r.flag === 'weakness' ? '<span class="arrow down">▼</span> ' : '';
+    return `<div class="op-row${r.small_sample ? ' faded' : ''}${isTarget ? ' target' : ''}">
+      <span class="eco">${esc(r.eco)}</span>
+      <span class="op-name"><span class="nm">${esc(r.name || '—')}</span>${isTarget ? '<span class="target-tag">TARGET</span>' : ''}</span>
+      <span class="games">${r.games}</span>
+      <span class="track"><span class="fill" style="width:${r._w}px"></span></span>
+      <span class="score">${arrow}${pct(r.score)}</span>
+    </div>`;
+  }
+
+  function opCol(label, table, color, target) {
+    const max = Math.max(1, ...table.rows.map(r => r.games));
+    table.rows.forEach(r => r._w = Math.max(3, Math.round(r.games / max * 100)));
+    return `<div class="col">
+      <div class="col-head"><h3>${label}</h3><span class="n">n=${table.n} · avg ${pct(table.avg_score)}</span></div>
+      <div class="lane-head"><span>ECO</span><span>OPENING</span><span style="text-align:right">GAMES</span><span>FREQ</span><span style="text-align:right">SCORE</span></div>
+      ${table.rows.map(r => opRow(r, color, target)).join('')}
+    </div>`;
+  }
+
+  function noteCard(sign, cls, claim, n) {
+    return `<div class="note-card"><span class="sign ${cls}">${sign}</span><span class="claim">${claim}</span><span class="n">n=${n}</span></div>`;
+  }
+
+  async function loadOpenings() {
+    const d = await getJSON(`/api/openings?${src}`);
+    const t = d.prep_target;
+    $('openingsCols').innerHTML =
+      opCol('AS WHITE', d.white, 'white', t) + opCol('AS BLACK', d.black, 'black', t);
+    $('openingsFootnote').hidden = false;
+    $('openingsFootnote').textContent =
+      `* openings under ${d.params.min_games} games are greyed, not hidden. small samples lie. ` +
+      `▲▼ mark scores ${d.params.threshold_pts}+ pts off his colour average. ` +
+      `data: chess.com last ${d.params.chesscom_months} months + lichess last ${d.params.lichess_max_games} rated games.`;
+
+    const base = $('metaLine').dataset.base || '';
+    $('metaLine').textContent = (base ? base + ' · ' : '') + d.games_analysed.toLocaleString() + ' games analysed';
+
+    // prep target banner
+    if (t) {
+      $('prepTitle').textContent = `${t.name || t.eco} (${t.eco}) as ${t.color[0].toUpperCase()}${t.color.slice(1)}`;
+      $('prepSub').textContent =
+        `scores ${pct(t.score)} across ${t.games} games, ${Math.abs(Math.round(t.delta))} pts below his overall score as ${t.color}`;
+      $('prepBtn').textContent = `VIEW ${t.games} GAMES →`;
+      $('prepBtn').hidden = false;
+    } else {
+      $('prepBanner').classList.add('none');
+      $('prepTitle').textContent = 'No clear weakness yet';
+      $('prepSub').textContent =
+        `no opening with ${d.params.min_games}+ games sits ${d.params.threshold_pts}+ pts under his colour average. widen the window with ?months= or &max_games=`;
+    }
+
+    // readout
+    const strengths = [], weaknesses = [];
+    for (const color of ['white', 'black']) {
+      for (const r of d[color].rows) {
+        const delta = Math.round(r.score - d[color].avg_score);
+        if (r.flag === 'strength')
+          strengths.push(noteCard('[+]', 'up', `${esc(r.name || r.eco)} (${r.eco}) as ${color}: ${pct(r.score)}, +${delta} pts on his ${color} average. Avoid steering here.`, r.games));
+        if (r.flag === 'weakness')
+          weaknesses.push(noteCard('[-]', 'down', `${esc(r.name || r.eco)} (${r.eco}) as ${color}: ${pct(r.score)}, ${delta} pts under his ${color} average. Aim the prep here.`, r.games));
+      }
+    }
+    const loss = d.readout.loss_terminations;
+    if (loss.on_time && loss.on_time.pct >= 25)
+      weaknesses.push(noteCard('[-]', 'down', `Time-trouble tendency: ${loss.on_time.pct}% of his losses are flag falls. Keep the position tense.`, loss.n));
+    const vhr = d.readout.vs_higher_rated;
+    if (vhr.n >= 15 && vhr.score >= 45)
+      strengths.push(noteCard('[+]', 'up', `Giant-killer: scores ${pct(vhr.score)} against opponents rated ${vhr.margin}+ above him. A rating edge alone won't carry the game.`, vhr.n));
+    if (vhr.n >= 15 && vhr.score <= 30)
+      weaknesses.push(noteCard('[-]', 'down', `Fades upward: only ${pct(vhr.score)} against opponents rated ${vhr.margin}+ above him.`, vhr.n));
+
+    const empty = (label) => `<div class="note-card"><span class="claim" style="color: var(--faint)">${label}</span></div>`;
+    $('strengthCards').innerHTML = strengths.join('') || empty('nothing clears the threshold in this window');
+    $('weakCards').innerHTML = weaknesses.join('') || empty('nothing clears the threshold in this window');
+    $('readoutSection').hidden = false;
+  }
+
+  // ---- performance ----
+  const TC_ORDER = ['rapid', 'classical', 'blitz', 'bullet', 'daily'];
+  const REFERENCE_TC = new Set(['blitz', 'bullet']);
+
+  function splitCol(label, split) {
+    const rows = TC_ORDER.filter(tc => split[tc]).map(tc => {
+      const s = split[tc];
+      const seg = (cls, letter, p) => p <= 0 ? '' :
+        `<span class="seg ${cls}" style="width:${p}%" title="${letter} ${p}%">${p >= 10 ? `${letter} ${p}` : ''}</span>`;
+      return `<div class="tc-row${REFERENCE_TC.has(tc) ? ' reference' : ''}">
+        <div class="tc-label"><span class="tc">${tc.toUpperCase()}</span><span class="n">n=${s.n}</span></div>
+        <div class="wdl">${seg('w', 'W', s.win_pct)}${seg('d', 'D', s.draw_pct)}${seg('l', 'L', s.loss_pct)}</div>
+      </div>`;
+    }).join('');
+    return `<div class="col"><div class="split-col-label">${label}</div>${rows || '<p class="loading">no games</p>'}</div>`;
+  }
+
+  async function loadPerformance() {
+    const d = await getJSON(`/api/performance?${src}`);
+    if (!d.colour_split) {
+      $('splitCols').innerHTML = '<p class="loading">colour split needs chess.com or lichess games. see the performance sheet for FIDE OTB statistics.</p>';
+      return;
+    }
+    $('splitCols').innerHTML =
+      splitCol('AS WHITE', d.colour_split.white) + splitCol('AS BLACK', d.colour_split.black);
+
+    const loss = d.loss_terminations;
+    if (loss.n) {
+      const parts = [
+        ['resigned', 'RESIGNS', 'd', false],
+        ['on_time', 'ON TIME', 'l', true],
+        ['checkmated', 'MATED', 'mated', false],
+        ['other', 'OTHER', 'd', false],
+      ].filter(([k]) => loss[k] && loss[k].pct > 0);
+      $('lossBar').innerHTML = parts.map(([k, label, cls, hot]) =>
+        `<span class="seg ${cls}${hot ? ' hot' : ''}" style="width:${loss[k].pct}%" title="${label} ${loss[k].pct}%">${loss[k].pct >= 12 ? `${label} ${loss[k].pct}` : ''}</span>`
+      ).join('');
+      $('lossHint').textContent = `by termination (n=${loss.n})`;
+      $('lossCaption').textContent = parts.map(([k, label]) => `${label.toLowerCase()} ${loss[k].pct}%`).join(' · ');
+      $('lossSection').hidden = false;
+    }
+  }
+
+  // ---- ratings chart ----
+  const W = 1240, H = 280;
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  async function loadRatings() {
+    const d = await getJSON(`/api/ratings?${src}`);
+    const priority = [
+      ['FIDE STD', d.fide?.std],
+      ['LICHESS RAPID', d.lichess?.rapid],
+      ['LICHESS CLASSICAL', d.lichess?.classical],
+      ['CHESS.COM RAPID', d.chesscom?.rapid],
+      ['CHESS.COM BLITZ', d.chesscom?.blitz],
+      ['LICHESS BLITZ', d.lichess?.blitz],
+      ['FIDE RAPID', d.fide?.rapid],
+      ['FIDE BLITZ', d.fide?.blitz],
+      ['CHESS.COM DAILY', d.chesscom?.daily],
+      ['CHESS.COM BULLET', d.chesscom?.bullet],
+      ['LICHESS BULLET', d.lichess?.bullet],
+    ];
+    const colors = ['#23904C', '#3390C9', '#BC841B'];
+
+    const allDates = priority.flatMap(([, pts]) => (pts || []).map(p => Date.parse(p.date)));
+    if (!allDates.length) { $('chartLoading').textContent = 'no rating history available'; return; }
+    const maxX = Math.max(...allDates);
+    const since = maxX - 3 * 365.25 * 86400e3;
+
+    const series = [];
+    for (const [name, pts] of priority) {
+      if (series.length === 3) break;
+      if (!pts) continue;
+      let kept = pts.map(p => ({ x: Date.parse(p.date), y: p.rating })).filter(p => p.x >= since);
+      if (kept.length < 2) continue;
+      const step = Math.ceil(kept.length / 160);
+      const last = kept[kept.length - 1];
+      kept = kept.filter((_, i) => i % step === 0);
+      if (kept[kept.length - 1].x !== last.x) kept.push(last);
+      series.push({ name, color: colors[series.length], pts: kept });
+    }
+    if (!series.length) { $('chartLoading').textContent = 'not enough rating history in the last 3 years'; return; }
+
+    const minX = Math.min(...series.map(s => s.pts[0].x));
+    const ys = series.flatMap(s => s.pts.map(p => p.y));
+    let lo = Math.floor(Math.min(...ys) / 100) * 100;
+    let hi = Math.ceil(Math.max(...ys) / 100) * 100;
+    if (hi === lo) hi += 100;
+    const mid = Math.round((lo + hi) / 2 / 50) * 50;
+    const px = (x) => (x - minX) / (maxX - minX || 1) * W;
+    const py = (y) => H - (y - lo) / (hi - lo) * H;
+
+    $('chartLegend').innerHTML = series.map(s =>
+      `<span class="item"><span class="key" style="background:${s.color}"></span>${s.name}</span>`).join('');
+
+    const gridY = [lo, mid, hi].map(v => `<line x1="0" y1="${py(v).toFixed(1)}" x2="${W}" y2="${py(v).toFixed(1)}" stroke="#1D2B1F"/>`).join('');
+    const lines = series.map((s, i) =>
+      `<polyline points="${s.pts.map(p => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ')}"` +
+      ` stroke="${s.color}" stroke-width="${i === 0 ? 2.5 : 2}" stroke-linejoin="round" stroke-linecap="round"` +
+      `${i === 0 ? ' style="filter: drop-shadow(0 0 7px rgba(61,240,124,0.45))"' : ''}/>`).join('');
+    const dots = series.map(s => {
+      const p = s.pts[s.pts.length - 1];
+      return `<circle cx="${px(p.x).toFixed(1)}" cy="${py(p.y).toFixed(1)}" r="4.5" fill="${s.color}" stroke="#0A0F0A" stroke-width="2"/>`;
+    }).join('');
+
+    // year ticks at Jan 1 boundaries
+    let xTicks = '';
+    for (let y = new Date(minX).getFullYear(); y <= new Date(maxX).getFullYear() + 1; y++) {
+      const t = Date.UTC(y, 0, 1);
+      if (t >= minX && t <= maxX) xTicks += `<span class="tick" style="left:${px(t).toFixed(0)}px; top:${H + 28}px">${y}</span>`;
+    }
+
+    // end labels with collision nudge
+    const ends = series.map(s => ({ y: py(s.pts[s.pts.length - 1].y) - 7, v: s.pts[s.pts.length - 1].y }))
+      .sort((a, b) => a.y - b.y);
+    for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 16) ends[i].y = ends[i - 1].y + 16;
+
+    $('chartBox').innerHTML =
+      `<svg id="chart" width="${W}" height="${H + 20}" viewBox="0 0 ${W} ${H + 20}" fill="none" style="overflow: visible;">${gridY}${lines}${dots}</svg>` +
+      `<span class="tick" style="left:4px; top:${py(hi) + 24}px">${hi}</span>` +
+      `<span class="tick" style="left:4px; top:${py(mid) + 24}px">${mid}</span>` +
+      `<span class="tick" style="left:4px; top:${py(lo) + 12}px">${lo}</span>` +
+      xTicks +
+      ends.map(e => `<span class="end-label" style="top:${e.y + 20}px">${e.v}</span>`).join('') +
+      `<div class="crosshair" id="crosshair"></div><div class="tooltip" id="tooltip"></div>`;
+
+    const chart = $('chart'), crosshair = $('crosshair'), tooltip = $('tooltip');
+    chart.addEventListener('mousemove', (e) => {
+      const rect = chart.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      if (x < 0 || x > W) return;
+      const t = minX + x / W * (maxX - minX);
+      const rows = series.map(s => {
+        let best = s.pts[0];
+        for (const p of s.pts) if (Math.abs(p.x - t) < Math.abs(best.x - t)) best = p;
+        return { name: s.name, color: s.color, value: best.y };
+      });
+      const dt = new Date(t);
+      tooltip.innerHTML = `<div class="when">${MONTHS[dt.getMonth()]} ${dt.getFullYear()}</div>` +
+        rows.map(r => `<div class="tt-row"><span class="swatch" style="background:${r.color}"></span>${r.name} <b style="color:var(--text)">${r.value}</b></div>`).join('');
+      crosshair.style.left = x + 'px';
+      crosshair.style.display = 'block';
+      tooltip.style.display = 'block';
+      tooltip.style.left = (x > W - 240 ? x - 210 : x + 14) + 'px';
+      tooltip.style.top = '40px';
+    });
+    chart.addEventListener('mouseleave', () => {
+      crosshair.style.display = 'none';
+      tooltip.style.display = 'none';
+    });
+  }
+
+  // ---- recent form ----
+  async function loadRecent() {
+    const d = await getJSON(`/api/recent?${src}&n=20`);
+    if (!d.n) { $('formStrip').innerHTML = '<p class="loading">no recent rated games</p>'; return; }
+    $('formStrip').innerHTML = d.sequence.map((s, i) => {
+      const cls = s.result === 'win' ? 'w' : s.result === 'draw' ? 'd' : 'l';
+      const latest = i === d.sequence.length - 1 ? ' latest' : '';
+      const tip = `${s.result} · ${s.platform} ${s.time_class}${s.eco ? ' · ' + s.eco : ''}${s.opponent_rating ? ' · opp ' + s.opponent_rating : ''}`;
+      return `<span class="sq ${cls}${latest}" title="${esc(tip)}">${cls.toUpperCase()}</span>`;
+    }).join('');
+    $('formCaption').textContent = `${d.wins}W ${d.draws}D ${d.losses}L over his last ${d.n} rated games.`;
+  }
+
+  $('perfLink').href = 'performance.html?' + src.toString();
+
+  // ---- refresh ----
+  $('refreshBtn').addEventListener('click', async () => {
+    $('refreshBtn').textContent = 'REFRESHING…';
+    try { await fetch(`${API}/api/refresh?${src}`, { method: 'POST' }); } catch {}
+    location.reload();
+  });
+
+  // ---- kick everything off in parallel ----
+  if (cc || li || fideId) {
+    const guard = (p) => p.catch(err => {
+      if (err.notFound) fatal('player not found');
+      else console.error(err);
+    });
+    guard(loadProfile());
+    guard(loadPerformance());
+    guard(loadRatings());
+    if (cc || li) {
+      guard(loadOpenings());
+      guard(loadRecent());
+    } else {
+      $('openingsCols').innerHTML =
+        '<p class="loading">openings analysis needs chess.com or lichess games. FIDE publishes ratings and results, not game moves.</p>';
+      $('prepBanner').classList.add('none');
+      $('prepTitle').textContent = 'No game data source linked';
+      $('prepSub').textContent = 'link a chess.com or lichess account on the lookup page to scan the repertoire';
+      $('formStrip').innerHTML = '<p class="loading">recent form needs online games</p>';
+    }
+  }
+</script>
+</body>
+</html>

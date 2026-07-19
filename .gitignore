@@ -1,0 +1,7 @@
+# local data and environments
+.venv/
+__pycache__/
+*.pyc
+backend/cache.db
+.DS_Store
+.claude/settings.local.json
