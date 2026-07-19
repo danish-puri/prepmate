@@ -23,6 +23,13 @@ uv pip install -r requirements.txt
 
 Then open http://127.0.0.1:8000 in a browser. Plain venv and pip work too.
 
+## Test it
+
+```
+uv pip install -r requirements-dev.txt
+.venv/bin/pytest
+```
+
 ## How it works
 
 FastAPI backend with static HTML pages on top. Each platform has its own adapter in `backend/adapters`, and responses are cached locally in SQLite so repeat lookups are fast and the upstream APIs stay happy.
