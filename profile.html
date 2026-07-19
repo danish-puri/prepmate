@@ -279,28 +279,6 @@
     padding: 24px 56px 0;
   }
 
-  /* ---- readout ---- */
-  .readout-col-label {
-    font-family: 'IBM Plex Mono', monospace;
-    font-weight: 600;
-    font-size: 11px;
-    letter-spacing: 0.14em;
-    padding-bottom: 14px;
-  }
-  .note-card {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 12px 14px;
-    background: var(--panel);
-    border: 1px solid var(--track);
-    border-radius: 3px;
-    margin-bottom: 14px;
-  }
-  .note-card .sign { width: 30px; flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 13px; }
-  .note-card .claim { flex: 1; font-size: 13.5px; line-height: 20px; color: var(--body); }
-  .note-card .n { flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); }
-
   /* ---- colour split ---- */
   .split-col-label {
     font-family: 'IBM Plex Mono', monospace;
@@ -469,19 +447,6 @@
       </div>
     </section>
     <p class="footnote" id="openingsFootnote" hidden></p>
-    <section id="readoutSection" hidden>
-      <div class="section-head"><h3>READOUT</h3><span class="hint">derived heuristics, not vibes. every claim ships its n</span></div>
-      <div class="two-col" style="padding-top: 20px;">
-        <div class="col">
-          <div class="readout-col-label up">STRENGTHS</div>
-          <div id="strengthCards"></div>
-        </div>
-        <div class="col">
-          <div class="readout-col-label down">WEAKNESSES</div>
-          <div id="weakCards"></div>
-        </div>
-      </div>
-    </section>
   </div>
 
   <!-- ================= PERFORMANCE ================= -->
@@ -623,7 +588,7 @@
     document.title = `PrepMate · ${name}`;
   }
 
-  // ---- openings + readout + prep target ----
+  // ---- openings + prep target ----
   function opRow(r, color, target) {
     const isTarget = target && target.color === color && target.eco === r.eco;
     const arrow = r.flag === 'strength' ? '<span class="arrow up">▲</span> '
@@ -645,10 +610,6 @@
       <div class="lane-head"><span>ECO</span><span>OPENING</span><span style="text-align:right">GAMES</span><span>FREQ</span><span style="text-align:right">SCORE</span></div>
       ${table.rows.map(r => opRow(r, color, target)).join('')}
     </div>`;
-  }
-
-  function noteCard(sign, cls, claim, n) {
-    return `<div class="note-card"><span class="sign ${cls}">${sign}</span><span class="claim">${claim}</span><span class="n">n=${n}</span></div>`;
   }
 
   async function loadOpenings() {
@@ -678,31 +639,6 @@
       $('prepSub').textContent =
         `no opening with ${d.params.min_games}+ games sits ${d.params.threshold_pts}+ pts under his colour average. widen the window with ?months= or &max_games=`;
     }
-
-    // readout
-    const strengths = [], weaknesses = [];
-    for (const color of ['white', 'black']) {
-      for (const r of d[color].rows) {
-        const delta = Math.round(r.score - d[color].avg_score);
-        if (r.flag === 'strength')
-          strengths.push(noteCard('[+]', 'up', `${esc(r.name || r.eco)} (${r.eco}) as ${color}: ${pct(r.score)}, +${delta} pts on his ${color} average. Avoid steering here.`, r.games));
-        if (r.flag === 'weakness')
-          weaknesses.push(noteCard('[-]', 'down', `${esc(r.name || r.eco)} (${r.eco}) as ${color}: ${pct(r.score)}, ${delta} pts under his ${color} average. Aim the prep here.`, r.games));
-      }
-    }
-    const loss = d.readout.loss_terminations;
-    if (loss.on_time && loss.on_time.pct >= 25)
-      weaknesses.push(noteCard('[-]', 'down', `Time-trouble tendency: ${loss.on_time.pct}% of his losses are flag falls. Keep the position tense.`, loss.n));
-    const vhr = d.readout.vs_higher_rated;
-    if (vhr.n >= 15 && vhr.score >= 45)
-      strengths.push(noteCard('[+]', 'up', `Giant-killer: scores ${pct(vhr.score)} against opponents rated ${vhr.margin}+ above him. A rating edge alone won't carry the game.`, vhr.n));
-    if (vhr.n >= 15 && vhr.score <= 30)
-      weaknesses.push(noteCard('[-]', 'down', `Fades upward: only ${pct(vhr.score)} against opponents rated ${vhr.margin}+ above him.`, vhr.n));
-
-    const empty = (label) => `<div class="note-card"><span class="claim" style="color: var(--faint)">${label}</span></div>`;
-    $('strengthCards').innerHTML = strengths.join('') || empty('nothing clears the threshold in this window');
-    $('weakCards').innerHTML = weaknesses.join('') || empty('nothing clears the threshold in this window');
-    $('readoutSection').hidden = false;
   }
 
   // ---- performance ----
