@@ -38,6 +38,24 @@ NOT_FOUND = {400, 404, 410}
 _ECO_RE = re.compile(r'\[ECO "([^"]+)"\]')
 _ECO_URL_RE = re.compile(r'\[ECOUrl "https://www\.chess\.com/openings/([^"]+)"\]')
 
+# a single SAN token: piece move, pawn move (with optional capture/promotion),
+# or castling, each with an optional check/mate suffix
+_SAN_RE = re.compile(r"^(?:[KQRBN][a-h]?[1-8]?x?[a-h][1-8]|[a-h](?:x[a-h])?[1-8](?:=[QRBN])?|O-O(?:-O)?)[+#]?$")
+_COMMENT_RE = re.compile(r"\{[^}]*\}")
+
+
+def _san_moves(pgn: str) -> list[str]:
+    """Mainline SAN from a chess.com PGN. The movetext follows the blank line
+    after the headers and is littered with move numbers and %clk comments;
+    keep only the tokens that parse as SAN."""
+    movetext = pgn.split("\n\n", 1)[1] if "\n\n" in pgn else pgn
+    moves = []
+    for token in _COMMENT_RE.sub(" ", movetext).split():
+        token = token.split(".")[-1]  # drops "1.", "1...", and glued "1.e4" prefixes
+        if _SAN_RE.match(token):
+            moves.append(token)
+    return moves
+
 
 # connector words left dangling once the move continuation is cut off
 # ("Modern-Defense-with-1-e4" would otherwise become "Modern Defense with")
@@ -100,13 +118,21 @@ def ratings_from_stats(stats: dict | None) -> dict:
     return out
 
 
-async def get_games(client: httpx.AsyncClient, username: str, months: int = 6) -> list[Game]:
+async def get_games(client: httpx.AsyncClient, username: str, since: datetime) -> list[Game]:
+    """All rated games from archive months >= `since`'s calendar month.
+
+    Selecting by calendar cutoff (not the last N archives) keeps the window
+    honest for players with inactive months: an archive list with gaps would
+    otherwise stretch "6 months" over years.
+    """
     username = username.lower()
     r = await _get(client, f"{BASE}/player/{username}/games/archives")
     if r.status_code in NOT_FOUND:
         return []
     r.raise_for_status()
-    archives = r.json().get("archives", [])[-months:]
+    cutoff = (since.year, since.month)
+    archives = [url for url in r.json().get("archives", [])
+                if (int(url.split("/")[-2]), int(url.split("/")[-1])) >= cutoff]
 
     now = datetime.now(timezone.utc)
     games: list[Game] = []
@@ -160,4 +186,5 @@ def _parse_game(g: dict, username: str) -> Game | None:
         end_time=g.get("end_time", 0),
         player_rating=me.get("rating"),
         opponent_rating=opp.get("rating"),
+        moves=_san_moves(pgn),
     )

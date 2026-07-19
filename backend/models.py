@@ -18,3 +18,4 @@ class Game:
     end_time: int            # epoch seconds
     player_rating: int | None
     opponent_rating: int | None
+    moves: list[str]         # mainline SAN, empty when the source has none

@@ -76,6 +76,63 @@ def prep_target(tables: dict) -> dict | None:
     return max(candidates, key=lambda r: r["games"])
 
 
+TREE_MAX_PLIES = 12
+TREE_MIN_GAMES = 2
+
+
+def _tree_node() -> dict:
+    return {"games": 0, "wins": 0, "draws": 0, "children": {}}
+
+
+def _bump(node: dict, result: str) -> None:
+    node["games"] += 1
+    node["wins"] += result == "win"
+    node["draws"] += result == "draw"
+
+
+def _serialize_children(node: dict, min_games: int) -> list[dict]:
+    rows = []
+    for san, child in sorted(node["children"].items(), key=lambda kv: -kv[1]["games"]):
+        if child["games"] < min_games:
+            continue
+        rows.append({
+            "san": san,
+            "games": child["games"],
+            "wins": child["wins"],
+            "draws": child["draws"],
+            "losses": child["games"] - child["wins"] - child["draws"],
+            "score": score_pct(child["wins"], child["draws"], child["games"]),
+            "freq_pct": round(child["games"] / node["games"] * 100, 1),
+            "children": _serialize_children(child, min_games),
+        })
+    return rows
+
+
+def move_tree(games: list[Game], max_plies: int = TREE_MAX_PLIES, min_node_games: int = TREE_MIN_GAMES) -> dict:
+    """Per-colour move tree over the first max_plies plies. Each node carries
+    the player's W/D/L for games that reached that position; branches seen
+    fewer than min_node_games times are pruned to keep the payload honest
+    (and small). Ply 0 is always White's first move, so in the black tree the
+    scouted player's own moves sit on the odd plies."""
+    out = {}
+    for color in ("white", "black"):
+        root = _tree_node()
+        for g in games:
+            if g.color != color or not g.moves:
+                continue
+            _bump(root, g.result)
+            node = root
+            for san in g.moves[:max_plies]:
+                node = node["children"].setdefault(san, _tree_node())
+                _bump(node, g.result)
+        out[color] = {
+            "n": root["games"],
+            "score": score_pct(root["wins"], root["draws"], root["games"]),
+            "moves": _serialize_children(root, min_node_games),
+        }
+    return out
+
+
 def colour_split(games: list[Game]) -> dict:
     out: dict = {"white": {}, "black": {}}
     for color in ("white", "black"):

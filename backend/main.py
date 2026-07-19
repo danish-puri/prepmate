@@ -8,6 +8,7 @@ Also serves the static frontend (lookup.html / profile.html) at /.
 
 import re
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
@@ -145,45 +146,115 @@ async def profile(request: Request, chesscom_user: str | None = Query(default=No
     return out
 
 
+TIME_CLASSES = {"bullet", "blitz", "rapid", "classical", "daily"}
+DEFAULT_TC = "blitz,rapid,classical"
+
+
+def _parse_tc(tc: str) -> set[str]:
+    classes = {t.strip().lower() for t in tc.split(",") if t.strip()}
+    unknown = classes - TIME_CLASSES
+    if unknown:
+        raise HTTPException(status_code=422,
+                            detail=f"unknown time class: {', '.join(sorted(unknown))} (valid: {', '.join(sorted(TIME_CLASSES))})")
+    if not classes:
+        raise HTTPException(status_code=422, detail="tc must name at least one time class")
+    return classes
+
+
+def _window_start(months: int) -> datetime:
+    """First day (UTC) of the calendar month `months - 1` months back. Both
+    platforms window from this same boundary: chess.com by archive month,
+    lichess via ?since=, so the merged dataset covers one time range."""
+    now = datetime.now(timezone.utc)
+    total = now.year * 12 + now.month - months
+    return datetime(total // 12, total % 12 + 1, 1, tzinfo=timezone.utc)
+
+
 async def _fetch_games(request: Request, chesscom_user: str | None, lichess_user: str | None,
-                       months: int, max_games: int):
+                       months: int, max_games: int, time_classes: set[str] | None = None):
+    """Merged game list plus per-platform coverage of the analysed window.
+
+    `time_classes` filters both platforms identically (None = keep all).
+    lichess additionally filters server-side so its count cap spends on
+    relevant games; chess.com archives arrive whole and are filtered here.
+    """
     if not chesscom_user and not lichess_user:
         raise HTTPException(status_code=422, detail="pass at least one of ?chesscom= or ?lichess=")
     client = _client(request)
-    games, found_any = [], False
+    since = _window_start(months)
+    games, li_truncated, found = [], False, set()
 
     if chesscom_user:
         if await _wrap_upstream(chesscom.get_profile(client, chesscom_user)) is not None:
-            found_any = True
-            games += await _wrap_upstream(chesscom.get_games(client, chesscom_user, months=months))
+            found.add("chesscom")
+            games += await _wrap_upstream(chesscom.get_games(client, chesscom_user, since=since))
     if lichess_user:
         if await _wrap_upstream(lichess.get_user(client, lichess_user)) is not None:
-            found_any = True
-            games += await _wrap_upstream(lichess.get_games(client, lichess_user, max_games=max_games))
+            found.add("lichess")
+            li_games, li_truncated = await _wrap_upstream(
+                lichess.get_games(client, lichess_user, max_games=max_games,
+                                  since=since, time_classes=time_classes))
+            games += li_games
 
-    if not found_any:
+    if not found:
         raise HTTPException(status_code=404, detail="player not found")
-    return games
+
+    if time_classes is not None:
+        games = [g for g in games if g.time_class in time_classes]
+
+    coverage = {}
+    for platform in found:
+        stamps = [g.end_time for g in games if g.platform == platform and g.end_time]
+        coverage[platform] = {
+            "games": sum(g.platform == platform for g in games),
+            "from": datetime.fromtimestamp(min(stamps), timezone.utc).date().isoformat() if stamps else None,
+            "to": datetime.fromtimestamp(max(stamps), timezone.utc).date().isoformat() if stamps else None,
+            "truncated": platform == "lichess" and li_truncated,
+        }
+    return games, coverage
 
 
 @app.get("/api/openings")
 async def openings(request: Request, chesscom_user: str | None = Query(default=None, alias="chesscom"),
                    lichess_user: str | None = Query(default=None, alias="lichess"),
                    months: int = Query(default=6, ge=1, le=24),
-                   max_games: int = Query(default=300, ge=10, le=1000)):
-    games = await _fetch_games(request, chesscom_user, lichess_user, months, max_games)
+                   max_games: int = Query(default=300, ge=10, le=1000),
+                   tc: str = Query(default=DEFAULT_TC)):
+    classes = _parse_tc(tc)
+    games, coverage = await _fetch_games(request, chesscom_user, lichess_user, months, max_games,
+                                         time_classes=classes)
     tables = analysis.opening_tables(games)
     return {
         "games_analysed": len(games),
         "white": tables["white"],
         "black": tables["black"],
         "prep_target": analysis.prep_target(tables),
-        "readout": {
-            "loss_terminations": analysis.loss_terminations(games),
-            "vs_higher_rated": analysis.vs_higher_rated(games),
-        },
+        "coverage": coverage,
         "params": {"min_games": analysis.MIN_GAMES, "threshold_pts": analysis.THRESHOLD_PTS,
-                   "chesscom_months": months, "lichess_max_games": max_games},
+                   "months": months, "max_games": max_games, "tc": sorted(classes)},
+    }
+
+
+@app.get("/api/movetree")
+async def movetree(request: Request, chesscom_user: str | None = Query(default=None, alias="chesscom"),
+                   lichess_user: str | None = Query(default=None, alias="lichess"),
+                   months: int = Query(default=6, ge=1, le=24),
+                   max_games: int = Query(default=300, ge=10, le=1000),
+                   depth: int = Query(default=analysis.TREE_MAX_PLIES, ge=2, le=30),
+                   min_games: int = Query(default=analysis.TREE_MIN_GAMES, ge=1, le=50),
+                   tc: str = Query(default=DEFAULT_TC)):
+    """Per-colour move tree of the player's repertoire, W/D/L at every node."""
+    classes = _parse_tc(tc)
+    games, coverage = await _fetch_games(request, chesscom_user, lichess_user, months, max_games,
+                                         time_classes=classes)
+    tree = analysis.move_tree(games, max_plies=depth, min_node_games=min_games)
+    return {
+        "games_analysed": len(games),
+        "white": tree["white"],
+        "black": tree["black"],
+        "coverage": coverage,
+        "params": {"depth_plies": depth, "min_node_games": min_games,
+                   "months": months, "max_games": max_games, "tc": sorted(classes)},
     }
 
 
@@ -202,7 +273,7 @@ async def performance(request: Request, chesscom_user: str | None = Query(defaul
             raise HTTPException(status_code=404, detail="player not found")
         return {"games_analysed": 0, "fide_stats": fide_stats}
 
-    games = await _fetch_games(request, chesscom_user, lichess_user, months, max_games)
+    games, _ = await _fetch_games(request, chesscom_user, lichess_user, months, max_games)
     return {
         "games_analysed": len(games),
         "totals": analysis.colour_totals(games),
@@ -252,7 +323,7 @@ async def ratings(request: Request, chesscom_user: str | None = Query(default=No
             out["chesscom_current"] = chesscom.ratings_from_stats(stats)
             # chess.com has no rating-history endpoint; reconstruct one from
             # the player's post-game ratings in the monthly archives
-            games = await _wrap_upstream(chesscom.get_games(client, chesscom_user, months=months))
+            games = await _wrap_upstream(chesscom.get_games(client, chesscom_user, since=_window_start(months)))
             out["chesscom"] = analysis.rating_history_from_games(games)
 
     if not found_any:
@@ -266,7 +337,7 @@ async def recent(request: Request, chesscom_user: str | None = Query(default=Non
                  n: int = Query(default=20, ge=1, le=100),
                  months: int = Query(default=3, ge=1, le=24),
                  max_games: int = Query(default=100, ge=10, le=1000)):
-    games = await _fetch_games(request, chesscom_user, lichess_user, months, max_games)
+    games, _ = await _fetch_games(request, chesscom_user, lichess_user, months, max_games)
     return analysis.recent_form(games, n=n)
 
 

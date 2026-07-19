@@ -204,7 +204,24 @@
     box-shadow: 0 6px 8px -6px rgba(61, 240, 124, 0.8);
   }
   .tc-filter { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted); padding-bottom: 12px; }
-  .tc-filter b { color: var(--text); font-weight: 600; }
+  .tc-chip {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    color: var(--faint);
+    background: none;
+    border: 1px solid var(--hairline);
+    border-radius: 2px;
+    padding: 4px 9px;
+    margin-left: 4px;
+    cursor: pointer;
+  }
+  .tc-chip:hover { color: var(--body); border-color: var(--dim); }
+  .tc-chip.active {
+    color: var(--phosphor);
+    border-color: var(--phosphor);
+    box-shadow: 0 0 8px rgba(61, 240, 124, 0.2);
+  }
 
   .panel { display: none; }
   .panel.active { display: block; }
@@ -383,6 +400,40 @@
   .sq.l { background: var(--red-fill); color: #FBEAE8; }
   .sq.latest { box-shadow: 0 0 10px rgba(61, 240, 124, 0.4); }
 
+  /* ---- repertoire tree ---- */
+  .tree { flex: 1; min-width: 480px; font-family: 'IBM Plex Mono', monospace; }
+  .tn {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) 120px 48px 48px 56px;
+    gap: 12px;
+    align-items: center;
+    padding: 6px 4px;
+    border-radius: 2px;
+    list-style: none;
+  }
+  .tn::-webkit-details-marker { display: none; }
+  summary.tn { cursor: pointer; }
+  summary.tn:hover { background: var(--panel-2); }
+  .tn .mv { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; }
+  .tn.opp .mv { color: var(--muted); font-weight: 400; }
+  .tn .caret { width: 10px; flex-shrink: 0; font-size: 9px; color: var(--faint); transition: transform 0.1s; }
+  details[open] > .tn .caret { transform: rotate(90deg); }
+  .tn .games, .tn .freq { font-size: 12px; color: var(--muted); text-align: right; }
+  .tn .score { font-weight: 600; font-size: 12px; text-align: right; color: var(--body); }
+  .tn .wdl.mini { height: 8px; }
+  .tn .wdl.mini .seg { padding: 0; }
+  .tree .kids { margin-left: 9px; border-left: 1px solid var(--hairline-dim); padding-left: 12px; }
+  .tree-head {
+    display: grid;
+    grid-template-columns: minmax(120px, 1fr) 120px 48px 48px 56px;
+    gap: 12px;
+    padding: 8px 4px;
+    border-bottom: 1px solid var(--hairline);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+  }
+
   footer { padding: 48px 56px; }
 
   @media (max-width: 1100px) {
@@ -432,11 +483,16 @@
   <div class="tabbar">
     <div class="tabs" role="tablist">
       <button class="tab active" data-panel="openings" role="tab">OPENINGS</button>
+      <button class="tab" data-panel="repertoire" role="tab">REPERTOIRE</button>
       <button class="tab" data-panel="performance" role="tab">PERFORMANCE</button>
       <button class="tab" data-panel="ratings" role="tab">RATINGS</button>
       <button class="tab" data-panel="recent" role="tab">RECENT FORM</button>
     </div>
-    <span class="tc-filter">tc: <b>BLITZ + RAPID + CLASSICAL</b></span>
+    <span class="tc-filter">tc:
+      <button class="tc-chip active" data-tc="blitz">BLITZ</button>
+      <button class="tc-chip active" data-tc="rapid">RAPID</button>
+      <button class="tc-chip active" data-tc="classical">CLASSICAL</button>
+    </span>
   </div>
 
   <!-- ================= OPENINGS ================= -->
@@ -447,6 +503,17 @@
       </div>
     </section>
     <p class="footnote" id="openingsFootnote" hidden></p>
+  </div>
+
+  <!-- ================= REPERTOIRE ================= -->
+  <div class="panel" id="repertoire">
+    <section>
+      <div class="section-head"><h3>MOVE TREE</h3><span class="hint">what he actually plays, move by move. score and n are his, for games reaching that position. click a row to expand</span></div>
+      <div class="two-col" style="padding-top: 24px;" id="treeCols">
+        <p class="loading">building the move tree, this can take a few seconds on first load…</p>
+      </div>
+    </section>
+    <p class="footnote" id="treeFootnote" hidden></p>
   </div>
 
   <!-- ================= PERFORMANCE ================= -->
@@ -527,7 +594,7 @@
     activate(tab.dataset.panel);
     history.replaceState(null, '', '#' + tab.dataset.panel);
   }));
-  if (['openings', 'performance', 'ratings', 'recent'].includes(location.hash.slice(1))) {
+  if (['openings', 'repertoire', 'performance', 'ratings', 'recent'].includes(location.hash.slice(1))) {
     activate(location.hash.slice(1));
   }
 
@@ -547,6 +614,41 @@
     if (r.status === 404) throw Object.assign(new Error('player not found'), { notFound: true });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return r.json();
+  }
+
+  const guard = (p) => p.catch(err => {
+    if (err.notFound) fatal('player not found');
+    else console.error(err);
+  });
+
+  // ---- time-class filter (applies to openings + repertoire) ----
+  const tcState = new Set(['blitz', 'rapid', 'classical']);
+  const tcParam = () => [...tcState].join(',');
+  document.querySelectorAll('.tc-chip').forEach(chip => chip.addEventListener('click', () => {
+    const tc = chip.dataset.tc;
+    if (tcState.has(tc)) {
+      if (tcState.size === 1) return; // at least one class stays on
+      tcState.delete(tc);
+    } else {
+      tcState.add(tc);
+    }
+    chip.classList.toggle('active', tcState.has(tc));
+    if (!cc && !li) return; // no game source, nothing to refilter
+    $('openingsCols').innerHTML = '<p class="loading">re-scanning with tc = ' + tcParam() + '…</p>';
+    $('treeCols').innerHTML = '<p class="loading">re-scanning…</p>';
+    $('prepTitle').textContent = 'scanning repertoire…';
+    guard(loadOpenings());
+    guard(loadRepertoire());
+  }));
+
+  function coverageLine(cov) {
+    const one = (key, label) => {
+      const c = cov?.[key];
+      if (!c || !c.games) return null;
+      const span = c.from ? ` (${c.from} → ${c.to}${c.truncated ? ', capped' : ''})` : '';
+      return `${label} ${c.games} games${span}`;
+    };
+    return [one('chesscom', 'chess.com'), one('lichess', 'lichess')].filter(Boolean).join(' · ');
   }
 
   // ---- header ----
@@ -613,7 +715,7 @@
   }
 
   async function loadOpenings() {
-    const d = await getJSON(`/api/openings?${src}`);
+    const d = await getJSON(`/api/openings?${src}&tc=${tcParam()}`);
     const t = d.prep_target;
     $('openingsCols').innerHTML =
       opCol('AS WHITE', d.white, 'white', t) + opCol('AS BLACK', d.black, 'black', t);
@@ -621,12 +723,15 @@
     $('openingsFootnote').textContent =
       `* openings under ${d.params.min_games} games are greyed, not hidden. small samples lie. ` +
       `▲▼ mark scores ${d.params.threshold_pts}+ pts off his colour average. ` +
-      `data: chess.com last ${d.params.chesscom_months} months + lichess last ${d.params.lichess_max_games} rated games.`;
+      `window: last ${d.params.months} calendar months, ${d.params.tc.join('+')} only. ` +
+      (coverageLine(d.coverage) || 'no games in window') + '.';
 
     const base = $('metaLine').dataset.base || '';
     $('metaLine').textContent = (base ? base + ' · ' : '') + d.games_analysed.toLocaleString() + ' games analysed';
 
-    // prep target banner
+    // prep target banner (reset first: a tc toggle can re-run this)
+    $('prepBanner').classList.remove('none');
+    $('prepBtn').hidden = true;
     if (t) {
       $('prepTitle').textContent = `${t.name || t.eco} (${t.eco}) as ${t.color[0].toUpperCase()}${t.color.slice(1)}`;
       $('prepSub').textContent =
@@ -639,6 +744,49 @@
       $('prepSub').textContent =
         `no opening with ${d.params.min_games}+ games sits ${d.params.threshold_pts}+ pts under his colour average. widen the window with ?months= or &max_games=`;
     }
+  }
+
+  // ---- repertoire move tree ----
+  function treeNode(m, ply, color, autoOpen) {
+    // ply 0 is always White's first move, so in the black tree his own moves
+    // sit on the odd plies
+    const mine = (color === 'white') === (ply % 2 === 0);
+    const num = Math.floor(ply / 2) + 1;
+    const label = `${num}${ply % 2 ? '…' : '.'} ${m.san}`;
+    const w = Math.round(m.wins / m.games * 100);
+    const l = Math.round(m.losses / m.games * 100);
+    const dr = Math.max(0, 100 - w - l);
+    const seg = (cls, p) => p <= 0 ? '' : `<span class="seg ${cls}" style="width:${p}%"></span>`;
+    const cells =
+      `<span class="mv"><span class="caret">${m.children.length ? '▶' : ''}</span>${esc(label)}</span>` +
+      `<span class="wdl mini" title="${m.wins}W ${m.draws}D ${m.losses}L">${seg('w', w)}${seg('d', dr)}${seg('l', l)}</span>` +
+      `<span class="games">${m.games}</span>` +
+      `<span class="freq">${Math.round(m.freq_pct)}%</span>` +
+      `<span class="score ${m.score >= 55 ? 'up' : m.score <= 45 ? 'down' : ''}">${pct(m.score)}</span>`;
+    if (!m.children.length) return `<div class="tn${mine ? '' : ' opp'}">${cells}</div>`;
+    // walk the main line open by default so the tab isn't a wall of collapsed rows
+    const kids = m.children.map((c, i) =>
+      treeNode(c, ply + 1, color, autoOpen && i === 0 && c.games >= 5 && ply < 7)).join('');
+    return `<details${autoOpen ? ' open' : ''}><summary class="tn${mine ? '' : ' opp'}">${cells}</summary><div class="kids">${kids}</div></details>`;
+  }
+
+  function treeCol(label, t, color) {
+    const rows = t.moves.map((m, i) => treeNode(m, 0, color, i === 0)).join('');
+    return `<div class="tree">
+      <div class="col-head"><h3>${label}</h3><span class="n">n=${t.n} · avg ${pct(t.score)}</span></div>
+      <div class="tree-head"><span>MOVE</span><span>W / D / L</span><span style="text-align:right">GAMES</span><span style="text-align:right">FREQ</span><span style="text-align:right">SCORE</span></div>
+      ${rows || '<p class="loading">no move data in this window</p>'}
+    </div>`;
+  }
+
+  async function loadRepertoire() {
+    const d = await getJSON(`/api/movetree?${src}&tc=${tcParam()}`);
+    $('treeCols').innerHTML = treeCol('AS WHITE', d.white, 'white') + treeCol('AS BLACK', d.black, 'black');
+    $('treeFootnote').hidden = false;
+    $('treeFootnote').textContent =
+      `* first ${d.params.depth_plies} plies of ${d.games_analysed.toLocaleString()} games. his moves bright, opponent replies dim. ` +
+      `freq is share of the parent position. lines seen under ${d.params.min_node_games}× are pruned. ` +
+      `window: last ${d.params.months} calendar months, ${d.params.tc.join('+')} only.`;
   }
 
   // ---- performance ----
@@ -817,19 +965,18 @@
 
   // ---- kick everything off in parallel ----
   if (cc || li || fideId) {
-    const guard = (p) => p.catch(err => {
-      if (err.notFound) fatal('player not found');
-      else console.error(err);
-    });
     guard(loadProfile());
     guard(loadPerformance());
     guard(loadRatings());
     if (cc || li) {
       guard(loadOpenings());
+      guard(loadRepertoire());
       guard(loadRecent());
     } else {
       $('openingsCols').innerHTML =
         '<p class="loading">openings analysis needs chess.com or lichess games. FIDE publishes ratings and results, not game moves.</p>';
+      $('treeCols').innerHTML =
+        '<p class="loading">the move tree needs chess.com or lichess games. FIDE publishes ratings and results, not game moves.</p>';
       $('prepBanner').classList.add('none');
       $('prepTitle').textContent = 'No game data source linked';
       $('prepSub').textContent = 'link a chess.com or lichess account on the lookup page to scan the repertoire';
