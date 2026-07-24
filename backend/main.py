@@ -78,7 +78,11 @@ async def rate_limit(request: Request, call_next):
         return JSONResponse(
             status_code=429,
             content={"detail": "too many requests, slow down for a moment"},
-            headers={"Retry-After": str(max(1, round(retry_after)))},
+            headers={
+                "Retry-After": str(max(1, round(retry_after))),
+                "X-RateLimit-Limit": str(int(limiter.per_minute)),
+                "X-RateLimit-Remaining": "0",
+            },
         )
 
     response = await call_next(request)

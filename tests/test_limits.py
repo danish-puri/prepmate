@@ -21,6 +21,10 @@ def app_with(monkeypatch):
             monkeypatch.setenv(key, value)
         return importlib.reload(main)
     yield build
+    # undo the env first: this finalizer runs before monkeypatch's own, so
+    # reloading here would otherwise bake the test settings into the module
+    # that every later test file shares
+    monkeypatch.undo()
     importlib.reload(main)
 
 
@@ -95,6 +99,8 @@ def test_api_returns_429_past_the_burst(app_with):
         response = client.get("/api/openings")
     assert response.status_code == 429
     assert int(response.headers["Retry-After"]) >= 1
+    assert response.headers["X-RateLimit-Remaining"] == "0"
+    assert response.json()["detail"]
 
 
 def test_remaining_header_counts_down(app_with):

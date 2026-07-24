@@ -17,11 +17,18 @@ def anyio_backend():
 
 
 def make_game(platform="lichess", time_class="blitz", color="white", result="win",
-              eco="A00", end_time=1750000000, moves=("e4", "e5")):
+              eco="A00", end_time=1750000000, moves=("e4", "e5"), termination="resigned",
+              opening="Test Opening", player_rating=1800, opponent_rating=1800):
     return Game(platform=platform, color=color, time_class=time_class, result=result,
-                termination="resigned", eco=eco, opening="Test Opening",
-                end_time=end_time, player_rating=1800, opponent_rating=1800,
-                moves=list(moves))
+                termination=termination, eco=eco, opening=opening,
+                end_time=end_time, player_rating=player_rating,
+                opponent_rating=opponent_rating, moves=list(moves))
+
+
+def make_games(n, **kwargs):
+    """n identical games, with end_time spread out so ordering stays stable."""
+    base = kwargs.pop("end_time", 1750000000)
+    return [make_game(end_time=base + i, **kwargs) for i in range(n)]
 
 
 class FakeResponse:
@@ -45,9 +52,15 @@ class FakeClient:
         self.routes = routes
         self.calls = []
 
-    async def get(self, url, **kwargs):
+    def _route(self, url, kwargs):
         self.calls.append((url, kwargs))
         for fragment, response in self.routes.items():
             if fragment in url:
                 return response
         raise AssertionError(f"unexpected request: {url}")
+
+    async def get(self, url, **kwargs):
+        return self._route(url, kwargs)
+
+    async def post(self, url, **kwargs):
+        return self._route(url, kwargs)
