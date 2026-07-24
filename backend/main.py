@@ -3,9 +3,10 @@
 Run from the project root:
     uvicorn backend.main:app --reload
 
-Also serves the static frontend (lookup.html / profile.html) at /.
+Also serves the static frontend (static/) at /.
 """
 
+import os
 import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -14,24 +15,92 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import analysis, cache
 from .adapters import chesscom, fide, lichess
+from .limiter import RateLimiter
 
 USER_AGENT = "PrepMate/0.1 (personal chess prep tool; contact: puridanish5@gmail.com)"
-ROOT = Path(__file__).parent.parent
+STATIC = Path(__file__).parent.parent / "static"
+
+# The browser loads the frontend from this same app, so cross-origin access is
+# never needed in production and the default allowlist only covers local dev.
+# Set ALLOWED_ORIGINS (comma separated) to open it up, or leave it empty to
+# send no CORS headers at all.
+DEFAULT_ORIGINS = "http://localhost:8000,http://127.0.0.1:8000"
+
+# Sustained requests per minute per IP, and how many may arrive back to back.
+# A page load fires about five calls, so the burst covers a few impatient
+# reloads before anything gets turned away.
+RATE_LIMIT_PER_MINUTE = float(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
+RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", "20"))
+
+
+def _allowed_origins() -> list[str]:
+    raw = os.getenv("ALLOWED_ORIGINS", DEFAULT_ORIGINS)
+    return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.client = httpx.AsyncClient(timeout=30, headers={"User-Agent": USER_AGENT}, follow_redirects=True)
+    app.state.limiter = (
+        RateLimiter(RATE_LIMIT_PER_MINUTE, RATE_LIMIT_BURST)
+        if RATE_LIMIT_PER_MINUTE > 0 and RATE_LIMIT_BURST > 0 else None
+    )
     yield
     await app.state.client.aclose()
 
 
 app = FastAPI(title="PrepMate", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    """Throttle /api/* per client IP.
+
+    Static files and /healthz are exempt: they touch no upstream API, and a
+    throttled probe would fail a deploy. CORS preflights are exempt too, since
+    they stop at the middleware and would otherwise spend a caller's budget
+    twice per real request.
+    """
+    limiter = getattr(request.app.state, "limiter", None)
+    if limiter is None or request.method == "OPTIONS" or not request.url.path.startswith("/api/"):
+        return await call_next(request)
+
+    # Railway terminates TLS in front of us, so uvicorn must be started with
+    # --forwarded-allow-ips for this to be the real caller rather than the proxy
+    client = request.client.host if request.client else "unknown"
+    allowed, remaining, retry_after = limiter.take(client)
+    if not allowed:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "too many requests, slow down for a moment"},
+            headers={"Retry-After": str(max(1, round(retry_after)))},
+        )
+
+    response = await call_next(request)
+    response.headers["X-RateLimit-Limit"] = str(int(limiter.per_minute))
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    return response
+
+
+# added last so it sits outermost and a 429 still carries CORS headers,
+# otherwise a cross-origin caller sees a network error instead of the status
+_origins = _allowed_origins()
+if _origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_origins,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+        # no cookies or auth headers are involved, and credentialed requests
+        # would turn any allowlist mistake into a real one
+        allow_credentials=False,
+        max_age=600,
+    )
 
 
 def _client(request: Request) -> httpx.AsyncClient:
@@ -358,5 +427,12 @@ async def refresh(chesscom_user: str | None = Query(default=None, alias="chessco
     return {"deleted_keys": deleted}
 
 
-# static frontend last, so /api/* wins
-app.mount("/", StaticFiles(directory=ROOT, html=True), name="static")
+@app.get("/healthz")
+async def healthz():
+    """Liveness probe. No upstream calls, so a throttled API never fails a deploy."""
+    return {"status": "ok"}
+
+
+# static frontend last, so /api/* and /healthz win. Only static/ is exposed,
+# which keeps the source tree and the cache database off the public URL.
+app.mount("/", StaticFiles(directory=STATIC, html=True), name="static")
