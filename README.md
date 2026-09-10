@@ -1,63 +1,84 @@
 # PrepMate
 
-by Danish Puri
+PrepMate is a chess tournament-preparation app by Danish Puri. It turns an
+opponent's public Chess.com and Lichess games into a scouting report with opening
+statistics, recurring move sequences, and recent performance.
 
-I built PrepMate to prepare for chess tournaments. I type an opponent's name and get a scouting report built from their public games.
+## Features
 
-## What it does
+- Look up Chess.com and Lichess usernames, with FIDE profile lookup by ID.
+- Compare opening frequency and results as White and Black.
+- Explore move trees and filter game reports by time control.
+- Identify a potential preparation target when enough games support it.
+- See sample sizes and available game coverage alongside the results.
+- Use the interface on a phone or desktop.
 
-- Matches a name to chess.com, lichess, and FIDE profiles
-- Pulls their recent rated games from the public APIs
-- Computes win, draw, and loss rates as White and as Black
-- Shows the openings they play most and how they score in each
-- Filters the openings and move tree by time control. Blitz, rapid, and classical are on by default, and I can toggle any of them off to see just the serious repertoire. Bullet and daily games stay out since that's rarely how anyone plays over the board
-- Picks one prep target, the weakest opening they still play often
-- Charts rating trajectory, loss terminations, and recent form
+FIDE supplies profile and rating information, not game moves. Platform accounts
+remain separate unless the user selects them together. Statistics describe the
+available games and do not guarantee an opponent's future play.
 
-## Run it
+## Stack
 
+Python, FastAPI, httpx, SQLite, and plain HTML/CSS/JavaScript. SQLite caches
+upstream responses, and request limits help control external API traffic.
+
+## Run locally
+
+Use Python 3.14, matching the Docker image.
+
+```sh
+# Create and activate a local environment.
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install the application and start its API and frontend.
+python -m pip install -r requirements.txt
+uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
-uv venv
-uv pip install -r requirements.txt
-.venv/bin/uvicorn backend.main:app --port 8000
+
+Open http://localhost:8000. Player lookups require access to the public chess APIs.
+
+## Tests
+
+```sh
+# Install test dependencies and run the offline suite.
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
 ```
 
-Then open http://127.0.0.1:8000 in a browser. Plain venv and pip work too.
+Tests use stubbed upstream responses and cover game analysis, adapters, caching,
+API endpoints, filtering, rate limits, and static-page behavior.
 
-## Test it
+## Configuration
 
-```
-uv pip install -r requirements-dev.txt
-.venv/bin/pytest
-```
+Set these environment variables before starting the server:
 
-The suite stubs both platform APIs, so it runs offline and never touches a real
-account. It covers the stats in `backend/analysis.py`, the cache, the FIDE
-scraper, every endpoint, and the rate limit and CORS rules.
+| Variable | Purpose |
+| --- | --- |
+| `CACHE_DB` | SQLite cache location. Defaults to `backend/cache.db`. |
+| `ALLOWED_ORIGINS` | Comma-separated CORS origins. Set empty for a same-origin deployment. |
+| `RATE_LIMIT_PER_MINUTE` | API request allowance per IP. Defaults to `60`. |
+| `RATE_LIMIT_BURST` | API burst allowance. Defaults to `20`. |
+| `STATIC_RATE_LIMIT_PER_MINUTE` | Frontend request allowance per IP. Defaults to `60`. |
+| `STATIC_RATE_LIMIT_BURST` | Frontend burst allowance. Defaults to `30`. |
 
-## Settings
+The `/healthz` endpoint is exempt from request limits. Keep generated caches,
+credentials, and local environment files out of version control.
 
-All optional, read from the environment at startup.
+## Deployment
 
-| Variable | Default | What it does |
-| --- | --- | --- |
-| `ALLOWED_ORIGINS` | `http://localhost:8000,http://127.0.0.1:8000` | Comma separated list of origins allowed to call the API from a browser. The frontend is served by this same app, so nothing cross-origin is needed in normal use. Set it to an empty string to send no CORS headers at all. |
-| `RATE_LIMIT_PER_MINUTE` | `60` | Sustained requests per minute per IP on `/api/*`. Set to `0` to turn limiting off. |
-| `RATE_LIMIT_BURST` | `20` | How many requests may arrive back to back before the sustained rate kicks in. |
+The Dockerfile serves the frontend and API together. Railway uses `railway.json`,
+its supplied `PORT`, and `/healthz` for deployment health checks. For a persistent
+cache, mount a volume at `/data` and set `CACHE_DB=/data/cache.db` as shown in
+`.env.railway.example`. The example contains configuration only, not credentials.
 
-Requests over the limit get a 429 and a `Retry-After` header. `/healthz` and the
-static pages are never limited. Every `/api/*` call fans out to chess.com and
-lichess under my User-Agent, so the point of the limit is to keep one impatient
-client from making trouble for them.
+## Project layout
 
-Behind a proxy, start uvicorn with `--proxy-headers --forwarded-allow-ips='*'`
-so the limiter keys on the real caller instead of the proxy. The Railway config
-already does this.
-
-## How it works
-
-FastAPI backend with static HTML pages on top. Each platform has its own adapter in `backend/adapters`, and responses are cached locally in SQLite so repeat lookups are fast and the upstream APIs stay happy.
+- `backend/`: API, public-data adapters, analysis, cache, and request limits.
+- `static/`: browser pages and image assets.
+- `tests/`: offline regression tests.
 
 ## Data sources
 
-api.chess.com, lichess.org/api, and ratings.fide.com. All public data, fetched politely. FIDE has no official API, so that adapter scrapes the profile page and can break if the page changes. Stats come straight from real game data, nothing is invented.
+Chess.com public API, Lichess public API, and public FIDE profile pages. FIDE
+profiles are parsed from HTML, so changes to its pages may require adapter updates.

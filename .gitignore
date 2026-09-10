@@ -1,7 +1,45 @@
-# local data and environments
+# Python environments and generated test/build files.
 .venv/
+venv/
 __pycache__/
-*.pyc
-backend/cache.db
+*.py[cod]
+.pytest_cache/
+.coverage*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Local secrets, configuration, and editor state. Only the deployment template
+# is intended for publication.
+.env
+.env.*
+!.env.railway.example
 .DS_Store
-.claude/settings.local.json
+.idea/
+.vscode/
+
+# Runtime caches, training data, and generated model artifacts stay local.
+*.db
+*.db-*
+*.sqlite*
+/data/
+/models/
+
+# Agent instructions and internal planning documents are not public source.
+.claude/
+.codex/
+.agents/
+.claude.md
+CLAUDE.md
+AGENTS.md
+agents.md
+/docs/
+/sales/
+
+# This public repository contains the working web app. Experimental code and
+# the alternate frontend scaffold remain in the private development workspace.
+/webapp/
+/train/
+/backend/patterns/
+/requirements-patterns.txt
+/tests/test_patterns*.py

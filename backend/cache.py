@@ -6,11 +6,15 @@ TTL in seconds.
 """
 
 import json
+import os
 import sqlite3
 import time
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "cache.db"
+# Deployed instances point CACHE_DB at a mounted volume, otherwise the cache
+# would be inside the image and every redeploy would start cold. Locally it
+# sits next to this module.
+DB_PATH = Path(os.getenv("CACHE_DB") or Path(__file__).parent / "cache.db")
 
 
 def _conn() -> sqlite3.Connection:

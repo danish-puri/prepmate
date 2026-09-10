@@ -33,3 +33,35 @@ def test_source_and_cache_are_not_exposed():
     for path in ("/backend/main.py", "/backend/cache.db", "/README.md",
                  "/railway.json", "/requirements.txt"):
         assert client.get(path).status_code == 404, path
+
+
+# --- cache headers -----------------------------------------------------
+#
+# Outbound bytes are the only metered resource on the host, so a repeat visitor
+# should re-fetch as little as possible.
+
+def test_images_are_cached_for_a_week():
+    r = client.get("/assets/logov2_prepmate.jpeg")
+    assert r.headers["Cache-Control"] == "public, max-age=604800"
+
+
+def test_pages_revalidate_instead_of_being_held():
+    """HTML changes on every deploy, so a held copy would outlive the fix."""
+    for path in ("/", "/index.html", "/profile.html"):
+        assert client.get(path).headers["Cache-Control"] == "public, no-cache", path
+
+
+def test_a_page_recheck_costs_no_body():
+    """StaticFiles sends an ETag, so revalidating is a 304 rather than a download."""
+    first = client.get("/index.html")
+    again = client.get("/index.html", headers={"If-None-Match": first.headers["etag"]})
+    assert again.status_code == 304
+    assert again.content == b""
+
+
+def test_the_api_is_never_cached():
+    assert "cache-control" not in client.get("/api/openings").headers
+
+
+def test_a_missing_file_is_not_cached():
+    assert "cache-control" not in client.get("/nope.html").headers

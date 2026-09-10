@@ -2,9 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0A0F0A">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-title" content="PrepMate">
 <title>PrepMate · Know them before move one</title>
 <link rel="icon" type="image/jpeg" href="assets/logov2_prepmate.jpeg">
+<link rel="apple-touch-icon" href="assets/logov2_prepmate.jpeg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;800;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
@@ -24,13 +28,24 @@
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  html {
+    /* iOS Safari inflates font sizes in landscape unless this is pinned */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     background: var(--bg);
     color: var(--text);
     font-family: 'Archivo', sans-serif;
+    /* dvh so the iOS toolbar collapsing does not leave a gap at the bottom */
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
+    overflow-x: hidden;
+    /* the grey flash on tap looks broken against the phosphor palette */
+    -webkit-tap-highlight-color: transparent;
   }
 
   /* ---- top nav ---- */
@@ -38,7 +53,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 20px 56px;
+    gap: 12px;
+    padding: 20px max(56px, env(safe-area-inset-right)) 20px max(56px, env(safe-area-inset-left));
     border-bottom: 1px solid var(--hairline);
   }
   .wordmark {
@@ -108,15 +124,42 @@
   }
   .search input {
     flex: 1;
+    min-width: 0;
     background: none;
     border: none;
     outline: none;
+    border-radius: 0; /* iOS rounds search inputs by default */
+    -webkit-appearance: none;
+    appearance: none;
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 15px;
+    /* 16px exactly: anything smaller makes iOS Safari zoom in on focus and
+       leaves the page scrolled sideways with no way back */
+    font-size: 16px;
     color: var(--body);
     caret-color: var(--phosphor);
   }
+  .search input::-webkit-search-cancel-button { -webkit-appearance: none; }
   .search input::placeholder { color: var(--faint); }
+  /* retyping a username on a phone keyboard is the most expensive thing on this
+     page, so wiping the field is a target rather than a 12px native glyph */
+  .search .clear {
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 18px;
+    line-height: 1;
+    color: var(--dim);
+    background: none;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+  }
+  .search .clear.on { display: flex; }
+  .search .clear:active { background: rgba(61, 240, 124, 0.12); color: var(--phosphor); }
   .search .hint {
     font-family: 'IBM Plex Mono', monospace;
     font-size: 12px;
@@ -124,6 +167,66 @@
     white-space: nowrap;
   }
   .search:focus-within { box-shadow: 0 0 32px rgba(61, 240, 124, 0.35); }
+
+  /* the visible submit. On a phone the hint is hidden and the return key is
+     the only way in, which is invisible until the keyboard is already up */
+  .go {
+    display: none;
+    flex-shrink: 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    color: var(--bg);
+    background: var(--phosphor);
+    border: none;
+    border-radius: 2px;
+    padding: 10px 18px;
+    min-height: 44px;
+    cursor: pointer;
+  }
+
+  /* ---- recent lookups ---- */
+  /* the same opponent gets checked more than once, and a chip is three taps
+     cheaper than typing a username on glass */
+  /* one scrolling row rather than a wrapping block: a long username would
+     otherwise push a second ragged line between the search box and the results */
+  .recent {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding-top: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .recent::-webkit-scrollbar { display: none; }
+  .recent.on { display: flex; }
+  .recent > * { flex-shrink: 0; }
+  .recent .rl {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--faint);
+  }
+  .recent .rc {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    color: var(--body);
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    border-radius: 2px;
+    padding: 9px 14px;
+    min-height: 40px;
+    max-width: 60vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  @media (hover: hover) {
+    .recent .rc:hover { border-color: var(--phosphor); color: var(--text); }
+  }
+  .recent .rc:active { border-color: var(--phosphor); color: var(--phosphor); }
 
   /* ---- match cards ---- */
   .match {
@@ -136,7 +239,9 @@
     border-radius: 3px;
     transition: border-color 120ms ease;
   }
-  .match:hover { border-color: var(--phosphor); }
+  @media (hover: hover) {
+    .match:hover { border-color: var(--phosphor); }
+  }
   .match .platform {
     width: 110px;
     flex-shrink: 0;
@@ -148,9 +253,11 @@
   }
   .match .detail {
     flex: 1;
+    min-width: 0;
     font-family: 'IBM Plex Mono', monospace;
     font-size: 14px;
     color: var(--text);
+    overflow-wrap: anywhere;
   }
   .match .status {
     flex-shrink: 0;
@@ -171,6 +278,10 @@
   .match .detail.dim { color: var(--faint); }
 
   /* ---- link row ---- */
+  /* an author display rule beats the UA sheet's [hidden]{display:none}, so
+     without this the row (and its dead BUILD DOSSIER link) shows before a
+     search has run */
+  .link-row[hidden] { display: none; }
   .link-row {
     display: flex;
     align-items: center;
@@ -189,10 +300,14 @@
     cursor: pointer;
     white-space: nowrap;
   }
+  .assert label {
+    /* the box itself is 18px, so the label carries the tap area */
+    min-height: 44px;
+  }
   .assert input[type="checkbox"] {
     appearance: none;
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
     border: 1px solid var(--phosphor);
     border-radius: 2px;
     cursor: pointer;
@@ -228,12 +343,20 @@
     border: none;
     border-radius: 2px;
     padding: 14px 26px;
+    min-height: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     white-space: nowrap;
     box-shadow: 0 0 20px rgba(61, 240, 124, 0.45);
     transition: box-shadow 120ms ease;
   }
-  .cta:hover { box-shadow: 0 0 32px rgba(61, 240, 124, 0.65); }
+  @media (hover: hover) {
+    .cta:hover { box-shadow: 0 0 32px rgba(61, 240, 124, 0.65); }
+  }
+  /* touch has no hover, so a press needs its own feedback or the tap feels dead */
+  .cta:active, .go:active { box-shadow: 0 0 32px rgba(61, 240, 124, 0.65); transform: translateY(1px); }
 
   /* ---- footer ---- */
   .sources {
@@ -241,17 +364,54 @@
     font-size: 11px;
     color: var(--faint);
     text-align: center;
-    padding: 26px 56px 40px;
+    padding: 26px 56px calc(40px + env(safe-area-inset-bottom));
   }
 
   @media (max-width: 780px) {
-    .nav { padding: 16px 20px; }
-    .hero { padding: 14px 20px 0; }
+    .nav { padding: 16px max(20px, env(safe-area-inset-right)) 16px max(20px, env(safe-area-inset-left)); }
+    .hero { padding: 14px max(20px, env(safe-area-inset-left)) 0 max(20px, env(safe-area-inset-right)); }
     h1 { font-size: 30px; }
     .search .hint { display: none; }
-    .link-row { flex-direction: column; align-items: flex-start; }
+    .link-row { flex-direction: column; align-items: stretch; }
     .assert label, .assert .note { white-space: normal; }
-    .sources { padding: 26px 20px 40px; }
+    .sources { padding: 26px 20px calc(40px + env(safe-area-inset-bottom)); }
+  }
+
+  /* ---- phones ---- */
+  @media (max-width: 560px) {
+    .nav { padding-top: 12px; padding-bottom: 12px; }
+    /* "local · no accounts · sqlite cache" is a build note competing with the
+       wordmark for a 390px row, and the footer already says all of it */
+    .nav-meta { display: none; }
+
+    /* the art is decoration and the search box is the job, so shrink the art
+       until the input clears the fold on a 667px-tall phone */
+    .hero-art { width: 260px; }
+    h1 { font-size: 26px; letter-spacing: -0.01em; padding-top: 8px; text-align: center; }
+    .tagline { font-size: 12px; line-height: 1.6; text-align: center; padding: 8px 0 18px; }
+
+    .search { padding: 8px 8px 8px 14px; gap: 6px; }
+    .go { display: inline-flex; align-items: center; }
+
+    /* platform and verdict on one line, the long detail string wrapping under */
+    .match {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4px 10px;
+      padding: 12px 14px;
+    }
+    /* placed explicitly: the DOM order is platform, detail, status, and the
+       verdict belongs next to the platform rather than on a row of its own */
+    .match .platform { width: auto; grid-area: 1 / 1; font-size: 11px; }
+    .match .status { grid-area: 1 / 2; font-size: 11px; }
+    .match .detail { grid-area: 2 / 1 / 3 / 3; font-size: 13px; line-height: 1.55; }
+
+    /* the one thing the page exists to hand off to, so it gets thumb-sized */
+    .cta { width: 100%; min-height: 52px; font-size: 14px; }
+    .search-status { font-size: 13px; line-height: 1.55; }
+    .assert label { font-size: 13px; line-height: 1.5; }
+    .assert .note { font-size: 11px; line-height: 1.5; padding-left: 32px; }
+    .sources { font-size: 11px; line-height: 1.7; }
   }
 </style>
 </head>
@@ -272,11 +432,17 @@
     <p class="tagline">pull their games. read their habits. walk in prepared.</p>
 
     <div class="stack">
-      <div class="search">
-        <span class="prompt">&gt;</span>
-        <input type="text" id="searchInput" aria-label="Search player" placeholder="search a player, press enter" autofocus>
+      <form class="search" id="searchForm" role="search" action="#" novalidate>
+        <span class="prompt" aria-hidden="true">&gt;</span>
+        <input type="search" id="searchInput" name="q" aria-label="Search player"
+               placeholder="search a player" enterkeyhint="search"
+               autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false">
+        <button class="clear" id="clearBtn" type="button" aria-label="Clear search">&times;</button>
         <span class="hint">name / username / FIDE id</span>
-      </div>
+        <button class="go" type="submit">GO</button>
+      </form>
+
+      <div class="recent" id="recent"></div>
 
       <div class="search-status" id="searchStatus" hidden></div>
       <div id="matches" style="display: flex; flex-direction: column; gap: 10px;"></div>
@@ -305,6 +471,8 @@
   const matches = document.getElementById('matches');
   const linkRow = document.getElementById('linkRow');
   const buildBtn = document.getElementById('buildBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const recentEl = document.getElementById('recent');
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -371,9 +539,68 @@
     }
   }
 
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && input.value.trim()) search(input.value.trim());
+  // ---- recent lookups (local only, never leaves the device) ----
+  const RECENT_KEY = 'prepmate.recent';
+  const RECENT_MAX = 4;
+
+  const readRecent = () => {
+    try { return JSON.parse(localStorage.getItem(RECENT_KEY)) || []; } catch { return []; }
+  };
+
+  function renderRecent() {
+    const list = readRecent();
+    recentEl.classList.toggle('on', list.length > 0);
+    recentEl.innerHTML = list.length
+      ? '<span class="rl">recent</span>' +
+        list.map(q => `<button class="rc" type="button">${esc(q)}</button>`).join('')
+      : '';
+  }
+
+  function rememberRecent(q) {
+    const list = readRecent().filter(x => x.toLowerCase() !== q.toLowerCase());
+    list.unshift(q);
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX))); } catch {}
+    renderRecent();
+  }
+
+  recentEl.addEventListener('click', (e) => {
+    const chip = e.target.closest('.rc');
+    if (!chip) return;
+    input.value = chip.textContent;
+    syncClear();
+    submit();
   });
+
+  // the clear button only earns its width once there is something to clear
+  const syncClear = () => clearBtn.classList.toggle('on', input.value.length > 0);
+  input.addEventListener('input', syncClear);
+  clearBtn.addEventListener('click', () => {
+    input.value = '';
+    syncClear();
+    input.focus();
+  });
+
+  function submit() {
+    const q = input.value.trim();
+    if (!q) return;
+    // dismiss the keyboard so the results are not behind it
+    input.blur();
+    rememberRecent(q);
+    search(q);
+  }
+
+  document.getElementById('searchForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    submit();
+  });
+
+  renderRecent();
+  syncClear();
+
+  // focused here rather than with the autofocus attribute: on a phone that
+  // throws the keyboard up over results that do not exist yet, and scrolls the
+  // page somewhere the user did not ask to be
+  if (!window.matchMedia('(pointer: coarse)').matches) input.focus();
 </script>
 </body>
 </html>

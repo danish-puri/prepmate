@@ -114,7 +114,40 @@ def test_movetree_depth_and_min_games_params(client):
     assert client.get("/api/movetree?lichess=alice&depth=1").status_code == 422
 
 
-def test_performance_keeps_every_time_class(client):
+def test_performance_default_tc_drops_bullet_and_daily(client):
     d = client.get("/api/performance?chesscom=alice&lichess=alice").json()
-    assert d["games_analysed"] == 5
-    assert client.captured["li_kwargs"]["time_classes"] is None
+    # same three games the openings tab analyses, so the two never disagree
+    assert d["games_analysed"] == 3
+    assert d["params"]["tc"] == ["blitz", "classical", "rapid"]
+    assert client.captured["li_kwargs"]["time_classes"] == {"blitz", "classical", "rapid"}
+    assert set(d["colour_split"]["white"]) == {"blitz", "rapid", "classical"}
+
+
+def test_performance_takes_tc(client):
+    d = client.get("/api/performance?chesscom=alice&lichess=alice&tc=bullet,daily").json()
+    assert d["games_analysed"] == 2
+    assert d["totals"]["total"]["n"] == 2
+    assert d["params"]["tc"] == ["bullet", "daily"]
+
+
+def test_performance_rejects_unknown_tc_before_any_upstream_call(client):
+    r = client.get("/api/performance?chesscom=alice&lichess=alice&tc=hyperbullet")
+    assert r.status_code == 422
+    assert client.captured == {}  # a typo costs nobody an upstream request
+
+
+def test_recent_rejects_unknown_tc(client):
+    assert client.get("/api/recent?lichess=alice&tc=hyperbullet").status_code == 422
+
+
+def test_recent_default_tc_drops_bullet_and_daily(client):
+    d = client.get("/api/recent?chesscom=alice&lichess=alice").json()
+    assert d["n"] == 3
+    assert {s["time_class"] for s in d["sequence"]} == {"blitz", "rapid", "classical"}
+    assert d["params"]["tc"] == ["blitz", "classical", "rapid"]
+
+
+def test_recent_takes_tc(client):
+    d = client.get("/api/recent?chesscom=alice&lichess=alice&tc=bullet").json()
+    assert d["n"] == 1 and d["sequence"][0]["time_class"] == "bullet"
+    assert client.captured["li_kwargs"]["time_classes"] == {"bullet"}

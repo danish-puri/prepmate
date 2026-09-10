@@ -1,0 +1,16 @@
+# Allow only runtime files into the Docker build context.
+**
+!Dockerfile
+!requirements.txt
+!backend/
+!backend/**
+!static/
+!static/**
+
+# Keep generated caches and bytecode out even when they appear under backend/.
+**/__pycache__/
+**/*.pyc
+**/*.db
+**/*.db-*
+**/*.sqlite*
+backend/patterns/

@@ -2,9 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0A0F0A">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-title" content="PrepMate">
 <title>PrepMate · Performance</title>
 <link rel="icon" type="image/jpeg" href="assets/logov2_prepmate.jpeg">
+<link rel="apple-touch-icon" href="assets/logov2_prepmate.jpeg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;800;900&family=IBM+Plex+Mono:wght@400;600;700&display=swap" rel="stylesheet">
@@ -32,21 +36,53 @@
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
+  html {
+    /* iOS Safari inflates font sizes in landscape unless this is pinned */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     background: var(--bg);
     color: var(--text);
     font-family: 'Archivo', sans-serif;
     min-height: 100vh;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .loading { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--faint); padding: 24px 0; }
   .err { color: var(--red); }
 
+  /* ---- tap-to-reveal detail (touch has no title tooltip) ---- */
+  .tip-pop {
+    position: fixed;
+    z-index: 50;
+    max-width: min(88vw, 320px);
+    padding: 10px 13px;
+    background: var(--panel-2);
+    border: 1px solid var(--phosphor);
+    border-radius: 3px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6), 0 0 14px rgba(61, 240, 124, 0.2);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--body);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .tip-pop.on { opacity: 1; }
+  [data-tip] { cursor: pointer; }
+
   .nav {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 20px 56px;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 20px max(56px, env(safe-area-inset-right)) 20px max(56px, env(safe-area-inset-left));
     border-bottom: 1px solid var(--hairline);
   }
   .wordmark {
@@ -72,22 +108,30 @@
     border: 1px solid var(--phosphor);
     border-radius: 2px;
     padding: 9px 16px;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     box-shadow: 0 0 10px rgba(61, 240, 124, 0.25);
   }
-  .nav-link:hover { box-shadow: 0 0 18px rgba(61, 240, 124, 0.45); }
+  @media (hover: hover) {
+    .nav-link:hover { box-shadow: 0 0 18px rgba(61, 240, 124, 0.45); }
+  }
+  .nav-link:active { box-shadow: 0 0 20px rgba(61, 240, 124, 0.5); }
 
   .player {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
     gap: 24px;
-    padding: 44px 56px 24px;
+    padding: 44px max(56px, env(safe-area-inset-right)) 24px max(56px, env(safe-area-inset-left));
     flex-wrap: wrap;
   }
-  .name-block { display: flex; flex-direction: column; gap: 12px; }
+  .name-block { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .name-block .kicker, .name-block .meta { overflow-wrap: anywhere; }
   .kicker { font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: 0.14em; color: var(--muted); }
-  .name-row { display: flex; align-items: center; gap: 16px; }
-  .name-row h1 { font-weight: 900; font-size: 44px; letter-spacing: -0.02em; line-height: 48px; }
+  .name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
+  .name-row h1 { font-weight: 900; font-size: 44px; letter-spacing: -0.02em; line-height: 48px; overflow-wrap: anywhere; }
   .title-chip {
     font-family: 'IBM Plex Mono', monospace;
     font-weight: 700;
@@ -115,10 +159,11 @@
   .chip .value { font-weight: 600; font-size: 24px; color: var(--text); }
   .chip .sub { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
 
-  section { padding: 36px 56px 8px; }
+  section { padding: 36px max(56px, env(safe-area-inset-right)) 8px max(56px, env(safe-area-inset-left)); }
   .section-head {
     display: flex;
     align-items: baseline;
+    flex-wrap: wrap;
     gap: 14px;
     padding-bottom: 12px;
     border-bottom: 1px solid var(--hairline);
@@ -128,6 +173,30 @@
 
   .two-col { display: flex; gap: 56px; flex-wrap: wrap; }
   .col { flex: 1; min-width: 480px; }
+
+  /* ---- colour switch ---- */
+  /* Stacked white-then-black columns mean a phone reader scrolls a whole table
+     before the other colour exists. On phones the two become one switchable
+     view; on a wide screen this stays hidden and both columns show as before. */
+  .colswitch { display: none; }
+  .colswitch button {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--hairline);
+    border-radius: 2px;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .colswitch button.on {
+    color: var(--phosphor);
+    border-color: var(--phosphor);
+    background: rgba(61, 240, 124, 0.06);
+    box-shadow: 0 0 12px rgba(61, 240, 124, 0.2);
+  }
 
   .split-col-label {
     font-family: 'IBM Plex Mono', monospace;
@@ -166,16 +235,27 @@
   .seg.mated { background: var(--mated-fill); color: var(--text); }
   .seg.hot { box-shadow: 0 0 12px rgba(255, 107, 97, 0.25); }
   .split-caption { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--dim); padding-top: 14px; }
+  /* a 5% slice is too narrow to hold its own label and touch has no tooltip to
+     fall back on, so on phones the three numbers are simply printed underneath */
+  .wdl-nums { display: none; }
 
   .legend { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
   .legend .item { display: flex; align-items: center; gap: 7px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--body); }
   .legend .key { width: 14px; height: 2px; }
-  .chart-wrap { position: relative; padding-top: 20px; overflow-x: auto; }
-  .chart-box { position: relative; width: 1240px; height: 345px; }
+  /* the chart sizes itself to the container instead of a fixed 1240px, so a
+     phone gets a readable chart rather than a sideways-scrolling one */
+  .chart-wrap { position: relative; padding-top: 20px; }
+  .chart-box {
+    position: relative;
+    width: 100%;
+    height: 345px;
+    /* vertical scrolling still works while a horizontal drag scrubs the chart */
+    touch-action: pan-y;
+  }
   .tick { position: absolute; font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--dim); pointer-events: none; }
   .end-label {
     position: absolute;
-    left: 1252px;
+    right: 0;
     font-family: 'IBM Plex Mono', monospace;
     font-weight: 600;
     font-size: 12px;
@@ -186,7 +266,6 @@
     position: absolute;
     top: 20px;
     width: 1px;
-    height: 280px;
     background: rgba(61, 240, 124, 0.4);
     display: none;
     pointer-events: none;
@@ -253,12 +332,95 @@
   .sq.l { background: var(--red-fill); color: #FBEAE8; }
   .sq.latest { box-shadow: 0 0 10px rgba(61, 240, 124, 0.4); }
 
-  footer { padding: 48px 56px; }
+  footer { padding: 48px 56px calc(48px + env(safe-area-inset-bottom)); }
 
   @media (max-width: 1100px) {
-    .nav, .player, section, footer { padding-left: 20px; padding-right: 20px; }
+    .nav, .player, section, footer {
+      padding-left: max(20px, env(safe-area-inset-left));
+      padding-right: max(20px, env(safe-area-inset-right));
+    }
     .col { min-width: 100%; }
+    .two-col { gap: 32px; }
     .name-row h1 { font-size: 32px; line-height: 36px; }
+  }
+
+  /* ---- phones and small tablets ---- */
+  @media (max-width: 760px) {
+    .nav { padding-top: 12px; padding-bottom: 12px; }
+    .nav-right { width: 100%; }
+    .nav-right .nav-link { flex: 1; min-height: 44px; }
+
+    .player { padding-top: 24px; padding-bottom: 20px; gap: 18px; }
+    .kicker { font-size: 10px; letter-spacing: 0.1em; line-height: 1.5; }
+    .name-row h1 { font-size: 28px; line-height: 32px; }
+    .meta { font-size: 11px; line-height: 1.55; }
+
+    /* three fixed 176px cards stack into three tall rows on a phone; a
+       three-across strip keeps the ratings in one glance */
+    .chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
+    .chip { width: auto; padding: 10px; gap: 3px; }
+    /* "CHESS.COM RAPID" needs two lines where "LICHESS BLITZ" needs one, so the
+       label reserves both and the three ratings keep a common baseline */
+    .chip .label { font-size: 10px; letter-spacing: 0.02em; line-height: 1.3; min-height: 2.6em; }
+    .chip .value { font-size: 20px; }
+    .chip .sub { font-size: 10px; white-space: nowrap; }
+
+    section { padding-top: 26px; }
+    .section-head { gap: 6px; }
+    .section-head h3 { font-size: 16px; }
+    .section-head .hint { font-size: 11px; line-height: 1.6; flex-basis: 100%; }
+    .loading { font-size: 13px; line-height: 1.6; }
+
+    /* the switch and the column it drives */
+    .colswitch { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-bottom: 18px; }
+    /* the :nth-last-child half of each pair means these only bite once both
+       columns are actually in the DOM, never on a lone loading placeholder */
+    .two-col[data-col="0"] > :nth-child(2):nth-last-child(1),
+    .two-col[data-col="1"] > :nth-child(1):nth-last-child(2) { display: none; }
+    /* the switch already names the colour, so the label would say it twice */
+    .col-view:has(.two-col > :nth-child(2)) .split-col-label { display: none; }
+
+    /* 220px donuts wrap one per row and turn the sheet into a scroll marathon.
+       Three across instead, drawn with a compact type scale so the numbers
+       survive being shrunk (see donut() below) */
+    .donut-row { gap: 10px 6px; padding-top: 4px; }
+    .donut-group { width: 100%; padding-top: 18px; gap: 10px; }
+    .donut-group-label { font-size: 10px; line-height: 1.4; }
+    .donut { flex: 1 1 0; min-width: 0; max-width: 132px; }
+    .donut svg { width: 100%; height: auto; }
+    .donut-legend { gap: 16px; font-size: 10px; padding-top: 14px; }
+
+    .split-col-label { padding-bottom: 12px; }
+    .tc-row { margin-bottom: 18px; }
+    .tc-label .tc { font-size: 12px; }
+    .tc-label .n { font-size: 12px; }
+    .wdl { height: 26px; }
+    .seg { font-size: 11px; padding-left: 6px; }
+    .wdl-nums {
+      display: block;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--dim);
+      padding-top: 6px;
+    }
+    .split-caption { font-size: 11px; line-height: 1.6; }
+
+    .chart-box { height: 260px; }
+    .legend { gap: 12px; }
+    .legend .item { font-size: 11px; }
+
+    /* bigger squares: 22px is under the 44px touch target and these are now
+       tappable for the game detail */
+    .form-strip { gap: 6px; }
+    .sq { width: 34px; height: 34px; font-size: 12px; }
+
+    footer { padding-top: 32px; }
+  }
+
+  @media (max-width: 380px) {
+    .chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .chip:nth-child(3) { grid-column: 1 / -1; }
+    .name-row h1 { font-size: 24px; line-height: 28px; }
   }
 </style>
 </head>
@@ -287,7 +449,7 @@
   </header>
 
   <section id="statsSection" hidden>
-    <div class="section-head"><h3>PLAYER STATISTICS</h3><span class="hint" id="statsHint">win / draw / loss share, all rated games in the window. centre shows n</span></div>
+    <div class="section-head"><h3>PLAYER STATISTICS</h3><span class="hint" id="statsHint">win / draw / loss share, rated blitz, rapid and classical in the window. centre shows n</span></div>
     <div class="donut-row" id="donutRow"></div>
     <div class="donut-legend">
       <span class="item"><span class="dot" style="background: var(--series-green)"></span>wins</span>
@@ -297,9 +459,15 @@
   </section>
 
   <section>
-    <div class="section-head"><h3>COLOUR SPLIT</h3><span class="hint">win / draw / loss share per time control. blitz and faster shown for reference, weighted low for OTB prep</span></div>
-    <div class="two-col" style="padding-top: 24px;" id="splitCols">
-      <p class="loading">pulling game archives, this can take a few seconds on first load…</p>
+    <div class="section-head"><h3>COLOUR SPLIT</h3><span class="hint">win / draw / loss share per time control. bullet and daily are left out, blitz shown for reference and weighted low for OTB prep</span></div>
+    <div class="col-view" style="padding-top: 24px;">
+      <div class="colswitch" data-for="splitCols">
+        <button type="button" class="on" data-i="0">AS WHITE</button>
+        <button type="button" data-i="1">AS BLACK</button>
+      </div>
+      <div class="two-col" id="splitCols" data-col="0">
+        <p class="loading">pulling game archives, this can take a few seconds on first load…</p>
+      </div>
     </div>
   </section>
 
@@ -312,8 +480,8 @@
   </section>
 
   <section>
-    <div class="section-head" style="justify-content: space-between; display: flex;">
-      <div style="display: flex; align-items: baseline; gap: 14px;">
+    <div class="section-head" style="justify-content: space-between; gap: 10px 14px;">
+      <div style="display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; min-width: 0;">
         <h3>RATING TRAJECTORY</h3>
         <span class="hint">lichess history from lichess api. chess.com history reconstructed from game archives</span>
       </div>
@@ -327,7 +495,7 @@
   </section>
 
   <section>
-    <div class="section-head"><h3>LAST 20</h3><span class="hint">rated games, all connected platforms, newest last</span></div>
+    <div class="section-head"><h3>LAST 20</h3><span class="hint">rated blitz, rapid and classical, all connected platforms, newest last</span></div>
     <div class="form-strip" id="formStrip"><p class="loading">pulling recent games…</p></div>
     <p class="split-caption" id="formCaption"></p>
   </section>
@@ -354,8 +522,19 @@
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const pct = (x) => Math.round(x) + '%';
+  // no hover means no native title tooltip, so anything hidden in one has to
+  // be reachable another way
+  const TOUCH = window.matchMedia('(hover: none)').matches;
 
   $('dossierLink').href = 'profile.html?' + src.toString();
+
+  // ---- colour switch (phones: one column at a time) ----
+  document.querySelectorAll('.colswitch').forEach(sw => sw.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    sw.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
+    $(sw.dataset.for).dataset.col = btn.dataset.i;
+  }));
 
   function fatal(msg) {
     document.querySelector('.player').innerHTML =
@@ -425,6 +604,7 @@
     return `<div class="tc-row${reference ? ' reference' : ''}">
       <div class="tc-label"><span class="tc">${label}</span><span class="n">n=${s.n}</span></div>
       <div class="wdl">${seg('w', 'W', s.win_pct)}${seg('d', 'D', s.draw_pct)}${seg('l', 'L', s.loss_pct)}</div>
+      <div class="wdl-nums">won ${s.win_pct}% · drew ${s.draw_pct}% · lost ${s.loss_pct}%</div>
     </div>`;
   }
 
@@ -448,9 +628,13 @@
     return `<div class="col"><div class="split-col-label">${label}</div>${rows || '<p class="loading">no games</p>'}</div>`;
   }
 
-  function donut(label, t) {
+  /* `compact` is for phones, where CSS shrinks the same 220-unit viewBox to
+     about 130px. Everything inside scales with it, so the type has to be sized
+     up in user units or the percentages come out at six pixels. */
+  function donut(label, t, compact) {
     if (!t.n) return '';
-    const size = 220, c = size / 2, r = 74, sw = 28;
+    const size = 220, c = size / 2, r = 74, sw = compact ? 36 : 28;
+    const F = { pct: compact ? 18 : 11, label: compact ? 15 : 11, n: compact ? 34 : 24 };
     const C = 2 * Math.PI * r;
     const gap = t.wins && t.draws && t.losses ? 2.5 : 0; // px gaps only between real segments
     const parts = [
@@ -469,32 +653,47 @@
       if (frac >= 0.07) {
         const theta = (cum + frac / 2) * 2 * Math.PI - Math.PI / 2;
         const x = c + r * Math.cos(theta), y = c + r * Math.sin(theta);
-        labels += `<text x="${x.toFixed(1)}" y="${(y + 3.5).toFixed(1)}" text-anchor="middle"` +
-          ` font-family="IBM Plex Mono, monospace" font-weight="600" font-size="11" fill="${ink}">${(frac * 100).toFixed(1)}%</text>`;
+        // no decimal on a phone: "38%" reads, "37.5%" turns to mush
+        const text = compact ? Math.round(frac * 100) + '%' : (frac * 100).toFixed(1) + '%';
+        labels += `<text x="${x.toFixed(1)}" y="${(y + F.pct / 3).toFixed(1)}" text-anchor="middle"` +
+          ` font-family="IBM Plex Mono, monospace" font-weight="600" font-size="${F.pct}" fill="${ink}">${text}</text>`;
       }
       cum += frac;
     }
     return `<div class="donut">
       <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
         ${segs}${labels}
-        <text x="${c}" y="${c - 8}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" letter-spacing="0.14em" fill="#8FAE95">${label}</text>
-        <text x="${c}" y="${c + 18}" text-anchor="middle" font-family="Archivo, sans-serif" font-weight="800" font-size="24" fill="#E8F5E9">${t.n.toLocaleString()}</text>
+        <text x="${c}" y="${c - F.n / 3}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="${F.label}" letter-spacing="0.14em" fill="#8FAE95">${label}</text>
+        <text x="${c}" y="${c + F.n * 0.72}" text-anchor="middle" font-family="Archivo, sans-serif" font-weight="800" font-size="${F.n}" fill="#E8F5E9">${t.n.toLocaleString()}</text>
       </svg>
     </div>`;
   }
 
-  async function loadPerformance() {
-    const d = await getJSON(`/api/performance?${src}`);
+  // the sheet is OTB prep, so it scans the same classes the dossier does
+  const TC = 'blitz,rapid,classical';
 
-    const groups = [];
-    if (d.fide_stats) groups.push(['FIDE OTB · ALL RATED GAMES, LIFETIME', d.fide_stats.all]);
+  // kept so a rotation can redraw them at the other type scale
+  let donutGroups = [];
+  const COMPACT = () => window.matchMedia('(max-width: 760px)').matches;
+
+  function renderDonuts() {
+    if (!donutGroups.length) return;
+    const compact = COMPACT();
+    $('donutRow').innerHTML = donutGroups.map(([label, t]) =>
+      `<div class="donut-group"><div class="donut-group-label">${label}</div>` +
+      `<div class="donut-row">${donut('WHITE', t.white, compact)}${donut('BLACK', t.black, compact)}${donut('TOTAL', t.total, compact)}</div></div>`
+    ).join('');
+  }
+
+  async function loadPerformance() {
+    const d = await getJSON(`/api/performance?${src}&tc=${TC}`);
+
+    donutGroups = [];
+    if (d.fide_stats) donutGroups.push(['FIDE OTB · ALL RATED GAMES, LIFETIME', d.fide_stats.all]);
     if (d.totals && d.totals.total.n)
-      groups.push([`ONLINE · LAST WINDOW, ${d.games_analysed.toLocaleString()} GAMES`, d.totals]);
-    if (groups.length) {
-      $('donutRow').innerHTML = groups.map(([label, t]) =>
-        `<div class="donut-group"><div class="donut-group-label">${label}</div>` +
-        `<div class="donut-row">${donut('WHITE', t.white)}${donut('BLACK', t.black)}${donut('TOTAL', t.total)}</div></div>`
-      ).join('');
+      donutGroups.push([`ONLINE · LAST WINDOW, ${d.games_analysed.toLocaleString()} GAMES`, d.totals]);
+    if (donutGroups.length) {
+      renderDonuts();
       $('statsHint').textContent = 'win / draw / loss share by colour. centre shows n';
       $('statsSection').hidden = false;
     }
@@ -520,8 +719,134 @@
     }
   }
 
-  const W = 1240, H = 280;
+  // ---- ratings chart ----
+  // Sized from the container on every draw rather than pinned to 1240px: a
+  // fixed chart on a phone means a sideways-scrolling strip nobody finds.
   const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const END_GUTTER = 42; // room at the right for the final-rating labels
+  let chart = null;      // {series, minX, maxX} once the data has landed
+
+  function drawChart() {
+    const box = $('chartBox');
+    if (!chart || !box.clientWidth) return;
+    const { series, minX, maxX } = chart;
+    lastChartW = box.clientWidth;
+    const W = Math.max(200, box.clientWidth - END_GUTTER);
+    const H = Math.max(140, box.clientHeight - 65); // 65 leaves the x-tick row
+
+    const ys = series.flatMap(s => s.pts.map(p => p.y));
+    let lo = Math.floor(Math.min(...ys) / 100) * 100;
+    let hi = Math.ceil(Math.max(...ys) / 100) * 100;
+    if (hi === lo) hi += 100;
+    const mid = Math.round((lo + hi) / 2 / 50) * 50;
+    const px = (x) => (x - minX) / (maxX - minX || 1) * W;
+    const py = (y) => H - (y - lo) / (hi - lo) * H;
+
+    const gridY = [lo, mid, hi].map(v => `<line x1="0" y1="${py(v).toFixed(1)}" x2="${W}" y2="${py(v).toFixed(1)}" stroke="#1D2B1F"/>`).join('');
+    const lines = series.map((s, i) =>
+      `<polyline points="${s.pts.map(p => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ')}"` +
+      ` stroke="${s.color}" stroke-width="${i === 0 ? 2.5 : 2}" stroke-linejoin="round" stroke-linecap="round"` +
+      `${i === 0 ? ' style="filter: drop-shadow(0 0 7px rgba(61,240,124,0.45))"' : ''}/>`).join('');
+    const dots = series.map(s => {
+      const p = s.pts[s.pts.length - 1];
+      return `<circle cx="${px(p.x).toFixed(1)}" cy="${py(p.y).toFixed(1)}" r="4.5" fill="${s.color}" stroke="#0A0F0A" stroke-width="2"/>`;
+    }).join('');
+
+    // year ticks at Jan 1 boundaries, thinned out when they would collide
+    const years = [];
+    for (let y = new Date(minX).getFullYear(); y <= new Date(maxX).getFullYear() + 1; y++) {
+      const t = Date.UTC(y, 0, 1);
+      if (t >= minX && t <= maxX) years.push([y, px(t)]);
+    }
+    const everyNth = Math.ceil((years.length * 34) / Math.max(1, W));
+    const xTicks = years.filter((_, i) => i % everyNth === 0)
+      .map(([y, x]) => `<span class="tick" style="left:${x.toFixed(0)}px; top:${H + 28}px">${y}</span>`).join('');
+
+    const ends = series.map(s => ({ y: py(s.pts[s.pts.length - 1].y) - 7, v: s.pts[s.pts.length - 1].y }))
+      .sort((a, b) => a.y - b.y);
+    for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 16) ends[i].y = ends[i - 1].y + 16;
+
+    box.innerHTML =
+      `<svg id="chart" width="${W}" height="${H + 20}" viewBox="0 0 ${W} ${H + 20}" fill="none" style="overflow: visible;">${gridY}${lines}${dots}</svg>` +
+      `<span class="tick" style="left:4px; top:${py(hi) + 24}px">${hi}</span>` +
+      `<span class="tick" style="left:4px; top:${py(mid) + 24}px">${mid}</span>` +
+      `<span class="tick" style="left:4px; top:${py(lo) + 12}px">${lo}</span>` +
+      xTicks +
+      ends.map(e => `<span class="end-label" style="top:${e.y + 20}px">${e.v}</span>`).join('') +
+      `<div class="crosshair" id="crosshair" style="height:${H}px"></div><div class="tooltip" id="tooltip"></div>`;
+
+    // the geometry the scrub handlers read; they are bound once, not per draw
+    geom = { W, minX, maxX, series };
+    bindScrub();
+  }
+
+  /* One scrub handler for mouse and touch. Pointer events give both, and
+     touch-action:pan-y on the box keeps vertical scrolling working while a
+     horizontal drag reads the chart. */
+  let geom = null, scrubBound = false;
+  function bindScrub() {
+    if (scrubBound) return;
+    scrubBound = true;
+    const box = $('chartBox');
+    let hideTimer = 0;
+
+    const scrub = (clientX) => {
+      if (!geom) return;
+      const { W, minX, maxX, series } = geom;
+      // looked up per call: a redraw replaces both elements
+      const crosshair = $('crosshair'), tooltip = $('tooltip');
+      if (!crosshair || !tooltip) return;
+      const rect = box.getBoundingClientRect();
+      const x = Math.max(0, Math.min(W, clientX - rect.left));
+      const t = minX + x / W * (maxX - minX);
+      const rows = series.map(s => {
+        let best = s.pts[0];
+        for (const p of s.pts) if (Math.abs(p.x - t) < Math.abs(best.x - t)) best = p;
+        return { name: s.name, color: s.color, value: best.y };
+      });
+      const dt = new Date(t);
+      tooltip.innerHTML = `<div class="when">${MONTHS[dt.getUTCMonth()]} ${dt.getUTCFullYear()}</div>` +
+        rows.map(r => `<div class="tt-row"><span class="swatch" style="background:${r.color}"></span>${r.name} <b style="color:var(--text)">${r.value}</b></div>`).join('');
+      crosshair.style.left = x + 'px';
+      crosshair.style.display = 'block';
+      tooltip.style.display = 'block';
+      // measured, not guessed, and flipped to the other side of the cursor
+      // rather than clamped, so it never parks under the finger reading it
+      const tw = tooltip.offsetWidth, bw = box.clientWidth;
+      let left = x + 14;
+      if (left + tw > bw) left = x - tw - 14;
+      tooltip.style.left = Math.max(0, Math.min(left, bw - tw)) + 'px';
+      tooltip.style.top = '40px';
+    };
+    const hide = () => {
+      const crosshair = $('crosshair'), tooltip = $('tooltip');
+      if (crosshair) crosshair.style.display = 'none';
+      if (tooltip) tooltip.style.display = 'none';
+    };
+
+    box.addEventListener('pointerdown', (e) => {
+      clearTimeout(hideTimer);
+      box.setPointerCapture?.(e.pointerId);
+      scrub(e.clientX);
+    });
+    box.addEventListener('pointermove', (e) => scrub(e.clientX));
+    box.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') hide(); });
+    // a tap leaves the reading up for a moment instead of blinking out
+    const linger = (e) => { if (e.pointerType !== 'mouse') hideTimer = setTimeout(hide, 2500); };
+    box.addEventListener('pointerup', linger);
+    box.addEventListener('pointercancel', linger);
+  }
+
+  // rotating a phone changes the width, so the chart and the donuts are redrawn
+  // to match. Height-only changes (the iOS toolbar collapsing) are ignored.
+  let lastChartW = 0, redrawTimer = 0;
+  window.addEventListener('resize', () => {
+    const w = $('chartBox').clientWidth;
+    if (w === lastChartW) return;
+    lastChartW = w;
+    clearTimeout(redrawTimer);
+    redrawTimer = setTimeout(() => { drawChart(); renderDonuts(); }, 150);
+  });
 
   async function loadRatings() {
     const d = await getJSON(`/api/ratings?${src}`);
@@ -559,83 +884,53 @@
     }
     if (!series.length) { $('chartLoading').textContent = 'not enough rating history in the last 3 years'; return; }
 
-    const minX = Math.min(...series.map(s => s.pts[0].x));
-    const ys = series.flatMap(s => s.pts.map(p => p.y));
-    let lo = Math.floor(Math.min(...ys) / 100) * 100;
-    let hi = Math.ceil(Math.max(...ys) / 100) * 100;
-    if (hi === lo) hi += 100;
-    const mid = Math.round((lo + hi) / 2 / 50) * 50;
-    const px = (x) => (x - minX) / (maxX - minX || 1) * W;
-    const py = (y) => H - (y - lo) / (hi - lo) * H;
-
     $('chartLegend').innerHTML = series.map(s =>
       `<span class="item"><span class="key" style="background:${s.color}"></span>${s.name}</span>`).join('');
 
-    const gridY = [lo, mid, hi].map(v => `<line x1="0" y1="${py(v).toFixed(1)}" x2="${W}" y2="${py(v).toFixed(1)}" stroke="#1D2B1F"/>`).join('');
-    const lines = series.map((s, i) =>
-      `<polyline points="${s.pts.map(p => `${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ')}"` +
-      ` stroke="${s.color}" stroke-width="${i === 0 ? 2.5 : 2}" stroke-linejoin="round" stroke-linecap="round"` +
-      `${i === 0 ? ' style="filter: drop-shadow(0 0 7px rgba(61,240,124,0.45))"' : ''}/>`).join('');
-    const dots = series.map(s => {
-      const p = s.pts[s.pts.length - 1];
-      return `<circle cx="${px(p.x).toFixed(1)}" cy="${py(p.y).toFixed(1)}" r="4.5" fill="${s.color}" stroke="#0A0F0A" stroke-width="2"/>`;
-    }).join('');
-
-    let xTicks = '';
-    for (let y = new Date(minX).getFullYear(); y <= new Date(maxX).getFullYear() + 1; y++) {
-      const t = Date.UTC(y, 0, 1);
-      if (t >= minX && t <= maxX) xTicks += `<span class="tick" style="left:${px(t).toFixed(0)}px; top:${H + 28}px">${y}</span>`;
-    }
-
-    const ends = series.map(s => ({ y: py(s.pts[s.pts.length - 1].y) - 7, v: s.pts[s.pts.length - 1].y }))
-      .sort((a, b) => a.y - b.y);
-    for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 16) ends[i].y = ends[i - 1].y + 16;
-
-    $('chartBox').innerHTML =
-      `<svg id="chart" width="${W}" height="${H + 20}" viewBox="0 0 ${W} ${H + 20}" fill="none" style="overflow: visible;">${gridY}${lines}${dots}</svg>` +
-      `<span class="tick" style="left:4px; top:${py(hi) + 24}px">${hi}</span>` +
-      `<span class="tick" style="left:4px; top:${py(mid) + 24}px">${mid}</span>` +
-      `<span class="tick" style="left:4px; top:${py(lo) + 12}px">${lo}</span>` +
-      xTicks +
-      ends.map(e => `<span class="end-label" style="top:${e.y + 20}px">${e.v}</span>`).join('') +
-      `<div class="crosshair" id="crosshair"></div><div class="tooltip" id="tooltip"></div>`;
-
-    const chart = $('chart'), crosshair = $('crosshair'), tooltip = $('tooltip');
-    chart.addEventListener('mousemove', (e) => {
-      const rect = chart.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      if (x < 0 || x > W) return;
-      const t = minX + x / W * (maxX - minX);
-      const rows = series.map(s => {
-        let best = s.pts[0];
-        for (const p of s.pts) if (Math.abs(p.x - t) < Math.abs(best.x - t)) best = p;
-        return { name: s.name, color: s.color, value: best.y };
-      });
-      const dt = new Date(t);
-      tooltip.innerHTML = `<div class="when">${MONTHS[dt.getMonth()]} ${dt.getFullYear()}</div>` +
-        rows.map(r => `<div class="tt-row"><span class="swatch" style="background:${r.color}"></span>${r.name} <b style="color:var(--text)">${r.value}</b></div>`).join('');
-      crosshair.style.left = x + 'px';
-      crosshair.style.display = 'block';
-      tooltip.style.display = 'block';
-      tooltip.style.left = (x > W - 240 ? x - 210 : x + 14) + 'px';
-      tooltip.style.top = '40px';
-    });
-    chart.addEventListener('mouseleave', () => {
-      crosshair.style.display = 'none';
-      tooltip.style.display = 'none';
-    });
+    chart = { series, minX: Math.min(...series.map(s => s.pts[0].x)), maxX };
+    drawChart();
   }
 
   async function loadRecent() {
-    const d = await getJSON(`/api/recent?${src}&n=20`);
+    const d = await getJSON(`/api/recent?${src}&n=20&tc=${TC}`);
     if (!d.n) { $('formStrip').innerHTML = '<p class="loading">no recent rated games</p>'; return; }
     $('formStrip').innerHTML = d.sequence.map((s, i) => {
       const cls = s.result === 'win' ? 'w' : s.result === 'draw' ? 'd' : 'l';
       const latest = i === d.sequence.length - 1 ? ' latest' : '';
-      const tip = `${s.result} · ${s.platform} ${s.time_class}${s.eco ? ' · ' + s.eco : ''}${s.opponent_rating ? ' · opp ' + s.opponent_rating : ''}`;
-      return `<span class="sq ${cls}${latest}" title="${esc(tip)}">${cls.toUpperCase()}</span>`;
+      const when = s.end_time ? new Date(s.end_time * 1000).toISOString().slice(0, 10) + ' · ' : '';
+      const tip = `${when}${s.result} · ${s.platform} ${s.time_class}${s.eco ? ' · ' + s.eco : ''}` +
+                  `${s.opening ? ' · ' + s.opening : ''}${s.opponent_rating ? ' · opp ' + s.opponent_rating : ''}`;
+      return `<span class="sq ${cls}${latest}" title="${esc(tip)}" data-tip="${esc(tip)}">${cls.toUpperCase()}</span>`;
     }).join('');
-    $('formCaption').textContent = `${d.wins}W ${d.draws}D ${d.losses}L over his last ${d.n} rated games.`;
+    $('formCaption').textContent = `${d.wins}W ${d.draws}D ${d.losses}L over his last ${d.n} rated games.` +
+      (TOUCH ? ' Tap a square for the game.' : '');
+  }
+
+  /* Touch devices never show a title tooltip, so the per-game detail behind the
+     form strip is simply unreachable on a phone. This puts it one tap away. */
+  if (TOUCH) {
+    let pop = null, popTimer = 0;
+    const hidePop = () => { if (pop) pop.classList.remove('on'); };
+    document.addEventListener('click', (e) => {
+      const target = e.target.closest('[data-tip]');
+      if (!target) return hidePop();
+      if (!pop) {
+        pop = document.createElement('div');
+        pop.className = 'tip-pop';
+        document.body.appendChild(pop);
+      }
+      pop.textContent = target.dataset.tip;
+      pop.classList.add('on');
+      // measured after the text lands so a long opening name still fits on screen
+      const r = target.getBoundingClientRect(), p = pop.getBoundingClientRect();
+      const left = Math.max(8, Math.min(r.left + r.width / 2 - p.width / 2, innerWidth - p.width - 8));
+      const below = r.bottom + 8;
+      pop.style.left = left + 'px';
+      pop.style.top = (below + p.height > innerHeight - 8 ? Math.max(8, r.top - p.height - 8) : below) + 'px';
+      clearTimeout(popTimer);
+      popTimer = setTimeout(hidePop, 3500);
+    });
+    addEventListener('scroll', hidePop, { passive: true, capture: true });
   }
 
   if (cc || li) {

@@ -111,13 +111,14 @@ def test_remaining_header_counts_down(app_with):
     assert (first, second) == ("4", "3")
 
 
-def test_healthz_and_static_are_exempt(app_with):
-    mod = app_with(RATE_LIMIT_PER_MINUTE="60", RATE_LIMIT_BURST="1")
+def test_healthz_is_exempt(app_with):
+    mod = app_with(RATE_LIMIT_PER_MINUTE="60", RATE_LIMIT_BURST="1",
+                   STATIC_RATE_LIMIT_PER_MINUTE="60", STATIC_RATE_LIMIT_BURST="1")
     with TestClient(mod.app) as client:
-        assert client.get("/api/openings").status_code == 422  # empties the bucket
+        assert client.get("/api/openings").status_code == 422  # empties the API bucket
+        assert client.get("/").status_code == 200               # empties the static one
         for _ in range(5):
             assert client.get("/healthz").status_code == 200
-            assert client.get("/").status_code == 200
 
 
 def test_limiting_can_be_switched_off(app_with):
@@ -125,6 +126,47 @@ def test_limiting_can_be_switched_off(app_with):
     with TestClient(mod.app) as client:
         codes = {client.get("/api/openings").status_code for _ in range(20)}
     assert codes == {422}
+
+
+# --- the frontend's own budget -----------------------------------------
+
+def test_static_spends_a_separate_budget_from_the_api(app_with):
+    """An emptied API bucket must not take the frontend down with it."""
+    mod = app_with(RATE_LIMIT_PER_MINUTE="60", RATE_LIMIT_BURST="1",
+                   STATIC_RATE_LIMIT_PER_MINUTE="60", STATIC_RATE_LIMIT_BURST="20")
+    with TestClient(mod.app) as client:
+        assert client.get("/api/openings").status_code == 422
+        assert client.get("/api/openings").status_code == 429
+        for _ in range(5):
+            assert client.get("/").status_code == 200
+
+
+def test_static_returns_429_past_its_burst(app_with):
+    mod = app_with(STATIC_RATE_LIMIT_PER_MINUTE="60", STATIC_RATE_LIMIT_BURST="2")
+    with TestClient(mod.app) as client:
+        assert client.get("/index.html").status_code == 200
+        assert client.get("/assets/logov2_prepmate.jpeg").status_code == 200
+        response = client.get("/")
+    assert response.status_code == 429
+    assert int(response.headers["Retry-After"]) >= 1
+
+
+def test_static_throttling_leaves_the_api_budget_alone(app_with):
+    """The header advertises the API allowance, so a page load must not move it."""
+    mod = app_with(RATE_LIMIT_PER_MINUTE="60", RATE_LIMIT_BURST="5",
+                   STATIC_RATE_LIMIT_PER_MINUTE="60", STATIC_RATE_LIMIT_BURST="20")
+    with TestClient(mod.app) as client:
+        for _ in range(5):
+            client.get("/")
+        response = client.get("/api/openings")
+    assert response.headers["X-RateLimit-Remaining"] == "4"
+
+
+def test_static_limiting_can_be_switched_off(app_with):
+    mod = app_with(STATIC_RATE_LIMIT_PER_MINUTE="0")
+    with TestClient(mod.app) as client:
+        codes = {client.get("/").status_code for _ in range(20)}
+    assert codes == {200}
 
 
 # --- CORS --------------------------------------------------------------

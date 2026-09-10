@@ -1,8 +1,29 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile",
+    "watchPatterns": [
+      "backend/**",
+      "static/**",
+      "requirements.txt",
+      "Dockerfile",
+      "railway.json"
+    ]
+  },
   "deploy": {
     "startCommand": "uvicorn backend.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'",
+    "numReplicas": 1,
     "healthcheckPath": "/healthz",
-    "restartPolicyType": "ON_FAILURE"
+    "healthcheckTimeout": 30,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3,
+    "limitOverride": {
+      "containers": {
+        "cpu": 0.5,
+        "memoryBytes": 536870912,
+        "diskBytes": 1073741824
+      }
+    }
   }
 }

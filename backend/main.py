@@ -37,10 +37,42 @@ DEFAULT_ORIGINS = "http://localhost:8000,http://127.0.0.1:8000"
 RATE_LIMIT_PER_MINUTE = float(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 RATE_LIMIT_BURST = int(os.getenv("RATE_LIMIT_BURST", "20"))
 
+# The frontend gets its own, looser budget. It reaches no upstream API, so the
+# only thing it spends is outbound bytes, which is the one metered resource on
+# the host. A page load is one HTML file plus a couple of images, so 60 a minute
+# is roughly twenty page loads and nobody clicking around will ever see a 429,
+# while a script looping over the frontend stops being unbounded.
+STATIC_RATE_LIMIT_PER_MINUTE = float(os.getenv("STATIC_RATE_LIMIT_PER_MINUTE", "60"))
+STATIC_RATE_LIMIT_BURST = int(os.getenv("STATIC_RATE_LIMIT_BURST", "30"))
+
+# Repeat visits are the cheaper half of this: a browser that caches sends no
+# request at all. The images are stable for as long as their filename is, so
+# they get a week. The HTML changes on every deploy, so it revalidates instead,
+# and StaticFiles already sends an ETag that turns the recheck into a bodyless
+# 304 rather than another download.
+CACHEABLE_ASSETS = (".jpg", ".jpeg", ".png", ".webp", ".svg", ".ico", ".woff2", ".css", ".js")
+ASSET_CACHE_CONTROL = "public, max-age=604800"
+PAGE_CACHE_CONTROL = "public, no-cache"
+
+# Which header carries the real caller when a proxy sits in front. Leave unset
+# and the socket peer is used, which is correct for local runs. Only name a
+# header the proxy overwrites on every request: X-Forwarded-For is appended to,
+# so its leftmost entry is whatever the caller decided to send.
+CLIENT_IP_HEADER = os.getenv("CLIENT_IP_HEADER", "")
+
 
 def _allowed_origins() -> list[str]:
     raw = os.getenv("ALLOWED_ORIGINS", DEFAULT_ORIGINS)
     return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
+
+
+def _client_ip(request: Request) -> str:
+    """Who to charge for this request in the rate limiter."""
+    if CLIENT_IP_HEADER:
+        value = request.headers.get(CLIENT_IP_HEADER)
+        if value:
+            return value.strip()
+    return request.client.host if request.client else "unknown"
 
 
 @asynccontextmanager
@@ -49,6 +81,10 @@ async def lifespan(app: FastAPI):
     app.state.limiter = (
         RateLimiter(RATE_LIMIT_PER_MINUTE, RATE_LIMIT_BURST)
         if RATE_LIMIT_PER_MINUTE > 0 and RATE_LIMIT_BURST > 0 else None
+    )
+    app.state.static_limiter = (
+        RateLimiter(STATIC_RATE_LIMIT_PER_MINUTE, STATIC_RATE_LIMIT_BURST)
+        if STATIC_RATE_LIMIT_PER_MINUTE > 0 and STATIC_RATE_LIMIT_BURST > 0 else None
     )
     yield
     await app.state.client.aclose()
@@ -59,21 +95,27 @@ app = FastAPI(title="PrepMate", lifespan=lifespan)
 
 @app.middleware("http")
 async def rate_limit(request: Request, call_next):
-    """Throttle /api/* per client IP.
+    """Throttle per client IP, on two separate budgets.
 
-    Static files and /healthz are exempt: they touch no upstream API, and a
-    throttled probe would fail a deploy. CORS preflights are exempt too, since
-    they stop at the middleware and would otherwise spend a caller's budget
-    twice per real request.
+    /api/* fans out to chess.com and lichess under my User-Agent, so it gets the
+    tight bucket. The frontend reaches no upstream but still costs outbound
+    bytes, so it gets a loose one rather than none at all: served unthrottled it
+    was the only path on the app with no ceiling on what a script could spend.
+
+    /healthz is exempt because a throttled probe would fail a deploy, and CORS
+    preflights are exempt because they stop at the middleware and would
+    otherwise spend a caller's budget twice per real request.
     """
-    limiter = getattr(request.app.state, "limiter", None)
-    if limiter is None or request.method == "OPTIONS" or not request.url.path.startswith("/api/"):
+    path = request.url.path
+    if request.method == "OPTIONS" or path == "/healthz":
         return await call_next(request)
 
-    # Railway terminates TLS in front of us, so uvicorn must be started with
-    # --forwarded-allow-ips for this to be the real caller rather than the proxy
-    client = request.client.host if request.client else "unknown"
-    allowed, remaining, retry_after = limiter.take(client)
+    is_api = path.startswith("/api/")
+    limiter = getattr(request.app.state, "limiter" if is_api else "static_limiter", None)
+    if limiter is None:
+        return await _with_cache_headers(request, call_next)
+
+    allowed, remaining, retry_after = limiter.take(_client_ip(request))
     if not allowed:
         return JSONResponse(
             status_code=429,
@@ -85,9 +127,30 @@ async def rate_limit(request: Request, call_next):
             },
         )
 
+    response = await _with_cache_headers(request, call_next)
+    if is_api:
+        response.headers["X-RateLimit-Limit"] = str(int(limiter.per_minute))
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+    return response
+
+
+async def _with_cache_headers(request: Request, call_next):
+    """Tell the browser how long it may keep a frontend file.
+
+    Set here rather than on the mount so it survives a StaticFiles swap, and so
+    the rule lives next to the rate limit it works with. Only successful GETs
+    get a header: caching an error, or a response to a request that changed
+    something, is how a stale page outlives the deploy that fixed it.
+    """
     response = await call_next(request)
-    response.headers["X-RateLimit-Limit"] = str(int(limiter.per_minute))
-    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    path = request.url.path
+    if path.startswith("/api/") or request.method != "GET" or response.status_code >= 400:
+        return response
+
+    if path.endswith(CACHEABLE_ASSETS):
+        response.headers["Cache-Control"] = ASSET_CACHE_CONTROL
+    else:
+        response.headers["Cache-Control"] = PAGE_CACHE_CONTROL
     return response
 
 
@@ -336,7 +399,11 @@ async def performance(request: Request, chesscom_user: str | None = Query(defaul
                       lichess_user: str | None = Query(default=None, alias="lichess"),
                       fide_id: str | None = Query(default=None, alias="fide"),
                       months: int = Query(default=6, ge=1, le=24),
-                      max_games: int = Query(default=300, ge=10, le=1000)):
+                      max_games: int = Query(default=300, ge=10, le=1000),
+                      tc: str = Query(default=DEFAULT_TC)):
+    # validated before any upstream call so a typo costs nobody a request
+    classes = _parse_tc(tc)
+    params = {"months": months, "max_games": max_games, "tc": sorted(classes)}
     fide_stats = None
     if fide_id:
         fide_stats = await _wrap_upstream(fide.get_stats(_client(request), fide_id))
@@ -344,9 +411,10 @@ async def performance(request: Request, chesscom_user: str | None = Query(defaul
     if not chesscom_user and not lichess_user:
         if fide_stats is None:
             raise HTTPException(status_code=404, detail="player not found")
-        return {"games_analysed": 0, "fide_stats": fide_stats}
+        return {"games_analysed": 0, "fide_stats": fide_stats, "params": params}
 
-    games, _ = await _fetch_games(request, chesscom_user, lichess_user, months, max_games)
+    games, _ = await _fetch_games(request, chesscom_user, lichess_user, months, max_games,
+                                  time_classes=classes)
     return {
         "games_analysed": len(games),
         "totals": analysis.colour_totals(games),
@@ -354,6 +422,7 @@ async def performance(request: Request, chesscom_user: str | None = Query(defaul
         "loss_terminations": analysis.loss_terminations(games),
         "vs_higher_rated": analysis.vs_higher_rated(games),
         "fide_stats": fide_stats,
+        "params": params,
     }
 
 
@@ -409,9 +478,15 @@ async def recent(request: Request, chesscom_user: str | None = Query(default=Non
                  lichess_user: str | None = Query(default=None, alias="lichess"),
                  n: int = Query(default=20, ge=1, le=100),
                  months: int = Query(default=3, ge=1, le=24),
-                 max_games: int = Query(default=100, ge=10, le=1000)):
-    games, _ = await _fetch_games(request, chesscom_user, lichess_user, months, max_games)
-    return analysis.recent_form(games, n=n)
+                 max_games: int = Query(default=100, ge=10, le=1000),
+                 tc: str = Query(default=DEFAULT_TC)):
+    classes = _parse_tc(tc)
+    games, _ = await _fetch_games(request, chesscom_user, lichess_user, months, max_games,
+                                  time_classes=classes)
+    return {
+        **analysis.recent_form(games, n=n),
+        "params": {"months": months, "max_games": max_games, "tc": sorted(classes)},
+    }
 
 
 @app.post("/api/refresh")
