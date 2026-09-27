@@ -59,11 +59,20 @@ All 922 games went through in about seven seconds on my laptop. His weakest clus
 
 This part runs from the command line and not the website. I didn't want Torch in a deployed image that otherwise needs three packages.
 
+The quickest way to try it is with the encoder I already trained, which is attached to the [pos-v1 release](https://github.com/danish-puri/prepmate/releases/tag/pos-v1).
+
 ```sh
 python -m pip install -r requirements-patterns.txt
+mkdir -p models
+curl -L -o models/pos-v1.pt https://github.com/danish-puri/prepmate/releases/download/pos-v1/pos-v1.pt
+python -m backend.patterns.scout --lichess <username> --model models/pos-v1.pt
+```
+
+To train your own, fetch a corpus and pretrain on it first.
+
+```sh
 python -m train.pretrain fetch --users train/users.txt --per-user 200 --out data/corpus
 python -m train.pretrain train --corpus data/corpus --out models/pos-v1.pt --device mps
-python -m backend.patterns.scout --lichess <username> --model models/pos-v1.pt
 ```
 
 Without `--model` it falls back to handcrafted features. That keeps the pipeline testable, but the trained network is the real thing.
