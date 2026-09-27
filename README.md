@@ -1,6 +1,6 @@
 # PrepMate
 
-PrepMate is a chess tournament-preparation app by Danish Puri. It turns an
+PrepMate is a chess tournament-preparation app. It turns an
 opponent's public Chess.com and Lichess games into a scouting report with opening
 statistics, recurring move sequences, and recent performance.
 
