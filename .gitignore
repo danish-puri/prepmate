@@ -35,6 +35,7 @@ AGENTS.md
 agents.md
 /docs/*
 !/docs/patterns.md
+!/docs/images/
 /sales/
 
 # The Next.js frontend is an unfinished scaffold and stays in the private
