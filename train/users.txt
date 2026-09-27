@@ -1,0 +1,24 @@
+# Corpus accounts for encoder pretraining, one lichess username per line.
+# Keep this list disjoint from the players you scout: the encoder is supposed
+# to know how people in general play, not how your opponent in particular does.
+# Missing or closed accounts are skipped with a warning.
+Zhigalko_Sergei
+Vladimirovich9000
+nihalsarin2004
+Alexander_Zubov
+Msb2
+Kelevra_00
+Night-King96
+RebeccaHarris
+Konevlad
+opperwezen
+Bigfish1995
+muisback
+Benefactorr
+Arka50
+may6enexttime
+Federicoo_C
+Bombegranate
+EmreKarali
+Vugarrasulov
+Sibelephant

@@ -1,0 +1,51 @@
+# PrepMate on Fly.io.
+#
+# First time only:
+#   fly launch --no-deploy --copy-config   (claims the app name)
+#   fly volumes create prepmate_data --size 1 --region iad
+# After that:
+#   fly deploy
+
+# "prepmate" was already taken on Fly, which is a global namespace
+app = "prepmate-chess"
+primary_region = "iad"
+
+[build]
+
+[env]
+  # the SQLite cache lives on the volume below, so it survives a redeploy
+  CACHE_DB = "/data/cache.db"
+
+  # the frontend is served by this same app, so no cross-origin access is
+  # needed and empty means no CORS headers at all
+  ALLOWED_ORIGINS = ""
+
+  # Fly Proxy overwrites this header on every request, unlike X-Forwarded-For,
+  # whose leftmost entry a caller can set themselves
+  CLIENT_IP_HEADER = "Fly-Client-IP"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+
+  # a volume attaches to one machine at a time, and the rate limiter keeps its
+  # buckets in process, so this stays a single always-on instance
+  min_machines_running = 1
+  auto_start_machines = true
+  auto_stop_machines = false
+
+  [[http_service.checks]]
+    path = "/healthz"
+    method = "GET"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[mounts]
+  source = "prepmate_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  cpus = 1
