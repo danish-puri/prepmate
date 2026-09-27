@@ -1,0 +1,7 @@
+# Deep pattern detection (backend/patterns, train/). Kept out of
+# requirements.txt on purpose: the web app deploys without any of this, and
+# torch alone is larger than the rest of the image put together.
+-r requirements.txt
+chess>=1.10
+numpy>=1.26
+torch>=2.2
