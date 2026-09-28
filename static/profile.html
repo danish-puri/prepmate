@@ -813,7 +813,7 @@
   <!-- ================= PATTERNS ================= -->
   <div class="panel" id="patterns">
     <section>
-      <div class="section-head"><h3>PATTERNS</h3><span class="hint">positions, not openings. a pretrained neural network groups the positions he reached, then each group is scored by how he did from there</span></div>
+      <div class="section-head"><h3>PATTERNS</h3><span class="hint">positions, not openings. a pretrained neural network groups the positions the player reached, then each group is scored by their results from there</span></div>
       <p class="pat-summary" id="patSummary"></p>
       <div class="col-view" style="padding-top: 24px;">
         <div class="colswitch" data-for="patCols">
@@ -821,7 +821,7 @@
           <button type="button" data-i="1">STRONGEST</button>
         </div>
         <div class="two-col" id="patCols" data-col="0">
-          <p class="loading">reading his games with the neural network. the first scout takes about ten seconds, repeat visits are instant…</p>
+          <p class="loading">reading the player's games with the neural network. the first scout takes about ten seconds, repeat visits are instant…</p>
         </div>
       </div>
     </section>
@@ -831,7 +831,7 @@
   <!-- ================= REPERTOIRE ================= -->
   <div class="panel" id="repertoire">
     <section>
-      <div class="section-head"><h3>MOVE TREE</h3><span class="hint">what he actually plays, move by move. score and n are his, for games reaching that position. click a row to expand</span></div>
+      <div class="section-head"><h3>MOVE TREE</h3><span class="hint">what the player actually plays, move by move. score and n are theirs, for games reaching that position. click a row to expand</span></div>
       <div class="col-view" style="padding-top: 24px;">
         <div class="colswitch" data-for="treeCols">
           <button type="button" class="on" data-i="0">AS WHITE</button>
@@ -860,7 +860,7 @@
       </div>
     </section>
     <section id="lossSection" hidden>
-      <div class="section-head"><h3>HOW HE LOSES</h3><span class="hint" id="lossHint">by termination</span></div>
+      <div class="section-head"><h3>LOSS PATTERNS</h3><span class="hint" id="lossHint">by termination</span></div>
       <div style="padding-top: 20px; max-width: 640px;">
         <div class="wdl" style="height: 22px;" id="lossBar"></div>
         <p class="split-caption" id="lossCaption"></p>
@@ -904,9 +904,16 @@
   const li = qs.get('lichess');
   const fideId = qs.get('fide');
   const src = new URLSearchParams();
+  // Keep a single validated history window in every game panel and its share link.
+  const requestedMonths = Number(qs.get('months') || 6);
+  const months = Number.isInteger(requestedMonths) && requestedMonths >= 1 && requestedMonths <= 24
+    ? requestedMonths : 6;
+  const widenToMonths = months < 12 ? 12 : 24;
+  let gamesAnalysed = null;
   if (cc) src.set('chesscom', cc);
   if (li) src.set('lichess', li);
   if (fideId) src.set('fide', fideId);
+  src.set('months', String(months));
 
   const FIDE_TITLES = {
     'Grandmaster': 'GM', 'International Master': 'IM', 'FIDE Master': 'FM',
@@ -1069,7 +1076,7 @@
     if (ccd.joined) metaParts.push('on chess.com since ' + new Date(ccd.joined * 1000).getFullYear());
     if (lid.games_total) metaParts.push(lid.games_total.toLocaleString() + ' lichess rated games');
     $('metaLine').dataset.base = metaParts.join(' · ');
-    $('metaLine').textContent = metaParts.join(' · ') || 'live data';
+    updateMetaLine();
 
     const candidates = [
       ['FIDE STD', fdd.ratings?.std, 'id ' + (fdd.fide_id || '')],
@@ -1089,12 +1096,28 @@
     document.title = `PrepMate · ${name}`;
   }
 
+  // Keep identity details and game coverage visible regardless of fetch completion order.
+  function updateMetaLine() {
+    const base = $('metaLine').dataset.base || '';
+    const count = gamesAnalysed === null ? null : gamesAnalysed === 0
+      ? '0 games in selected window' : `${gamesAnalysed.toLocaleString()} games analysed`;
+    $('metaLine').textContent = [base || (!count ? 'live data' : ''), count].filter(Boolean).join(' · ');
+  }
+
   // ---- openings + prep target ----
   /* The banner names a weakness that lives somewhere down a long table; on a
      phone that is a lot of scrolling and guessing. The button jumps to the row,
      switching to the right colour first, and flashes it so the eye lands. */
   let prepTarget = null;
+  // The prep button either expands an empty history window or jumps to a cited weakness.
+  let widenWindow = false;
   $('prepBtn').addEventListener('click', () => {
+    if (widenWindow) {
+      const next = new URL(location.href);
+      next.searchParams.set('months', String(widenToMonths));
+      location.assign(next);
+      return;
+    }
     if (!prepTarget) return;
     activate('openings');
     document.querySelector('.tab[data-panel="openings"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
@@ -1127,15 +1150,17 @@
   }
 
   function opCol(label, table, color, target) {
+    // An empty table needs a direct explanation instead of a blank set of columns.
     const max = Math.max(1, ...table.rows.map(r => r.games));
+    const summary = table.n ? `n=${table.n} · avg ${pct(table.avg_score)}` : 'n=0 · no data';
     table.rows.forEach(r => r._w = Math.max(3, Math.round(r.games / max * 100)));
     return `<div class="col">
-      <div class="col-head"><h3>${label}</h3><span class="n">n=${table.n} · avg ${pct(table.avg_score)}</span></div>
-      <div class="lane-head"><span>ECO</span><span>OPENING</span><span style="text-align:right">GAMES</span><span class="h-freq">FREQ</span><span style="text-align:right">SCORE</span></div>
-      ${table.rows.map(r => opRow(r, color, target)).join('')}
+      <div class="col-head"><h3>${label}</h3><span class="n">${summary}</span></div>
+      ${table.rows.length ? `<div class="lane-head"><span>ECO</span><span>OPENING</span><span style="text-align:right">GAMES</span><span class="h-freq">FREQ</span><span style="text-align:right">SCORE</span></div>${table.rows.map(r => opRow(r, color, target)).join('')}` : '<p class="loading">No games in the selected window.</p>'}
     </div>`;
   }
 
+  // Render openings and only offer a scouting conclusion when the window contains evidence.
   async function loadOpenings() {
     const d = await getJSON(`/api/openings?${src}&tc=${tcParam()}`);
     const t = d.prep_target;
@@ -1144,35 +1169,54 @@
     $('openingsFootnote').hidden = false;
     $('openingsFootnote').textContent =
       `* openings under ${d.params.min_games} games are greyed, not hidden. small samples lie. ` +
-      `▲▼ mark scores ${d.params.threshold_pts}+ pts off his colour average. ` +
+      `▲▼ mark scores ${d.params.threshold_pts}+ pts off the player's colour average. ` +
       `window: last ${d.params.months} calendar months, ${d.params.tc.join('+')} only. ` +
       (coverageLine(d.coverage) || 'no games in window') + '.';
 
-    const base = $('metaLine').dataset.base || '';
-    $('metaLine').textContent = (base ? base + ' · ' : '') + d.games_analysed.toLocaleString() + ' games analysed';
+    gamesAnalysed = d.games_analysed;
+    updateMetaLine();
 
     // prep target banner (reset first: a tc toggle can re-run this)
     $('prepBanner').classList.remove('none');
     $('prepBtn').hidden = true;
     prepTarget = null;
+    widenWindow = false;
     if (t) {
       $('prepTitle').textContent = `${t.name || t.eco} (${t.eco}) as ${t.color[0].toUpperCase()}${t.color.slice(1)}`;
       $('prepSub').textContent =
-        `scores ${pct(t.score)} across ${t.games} games, ${Math.abs(Math.round(t.delta))} pts below his overall score as ${t.color}`;
+        `scores ${pct(t.score)} across ${t.games} games, ${Math.abs(Math.round(t.delta))} pts below the player's overall score as ${t.color}`;
       $('prepBtn').textContent = `SHOW ${t.games} GAMES →`;
       $('prepBtn').hidden = false;
       prepTarget = t;
+    } else if (d.games_analysed === 0) {
+      $('prepTitle').textContent = `No games in the selected ${d.params.months}-month window`;
+      $('prepSub').textContent = d.params.months < 24
+        ? 'There is not enough data in this window to scout openings. Check a wider window for older games.'
+        : 'There is not enough game data in this window to scout openings.';
+      if (d.params.months < 24) {
+        $('prepBtn').textContent = `CHECK ${widenToMonths} MONTHS →`;
+        $('prepBtn').hidden = false;
+        widenWindow = true;
+      }
+    } else if (d.games_analysed < d.params.min_games) {
+      $('prepTitle').textContent = `Only ${d.games_analysed} games in this window`;
+      $('prepSub').textContent = `That is not enough to assess openings. A prep target needs at least ${d.params.min_games} games in one opening.`;
+      if (d.params.months < 24) {
+        $('prepBtn').textContent = `CHECK ${widenToMonths} MONTHS →`;
+        $('prepBtn').hidden = false;
+        widenWindow = true;
+      }
     } else {
       $('prepBanner').classList.add('none');
       $('prepTitle').textContent = 'No clear weakness yet';
       $('prepSub').textContent =
-        `no opening with ${d.params.min_games}+ games sits ${d.params.threshold_pts}+ pts under his colour average. widen the window with ?months= or &max_games=`;
+        `no opening with ${d.params.min_games}+ games sits ${d.params.threshold_pts}+ pts under the player's colour average.`;
     }
   }
 
   // ---- repertoire move tree ----
   function treeNode(m, ply, color, autoOpen) {
-    // ply 0 is always White's first move, so in the black tree his own moves
+    // ply 0 is always White's first move, so in the black tree the player's moves
     // sit on the odd plies
     const mine = (color === 'white') === (ply % 2 === 0);
     const num = Math.floor(ply / 2) + 1;
@@ -1208,7 +1252,7 @@
     $('treeCols').innerHTML = treeCol('AS WHITE', d.white, 'white') + treeCol('AS BLACK', d.black, 'black');
     $('treeFootnote').hidden = false;
     $('treeFootnote').textContent =
-      `* first ${d.params.depth_plies} plies of ${d.games_analysed.toLocaleString()} games. his moves bright, opponent replies dim. ` +
+      `* first ${d.params.depth_plies} plies of ${d.games_analysed.toLocaleString()} games. the player's moves bright, opponent replies dim. ` +
       `freq is share of the parent position. lines seen under ${d.params.min_node_games}× are pruned. ` +
       `window: last ${d.params.months} calendar months, ${d.params.tc.join('+')} only.`;
   }
@@ -1446,7 +1490,7 @@
                   `${s.opening ? ' · ' + s.opening : ''}${s.opponent_rating ? ' · opp ' + s.opponent_rating : ''}`;
       return `<span class="sq ${cls}${latest}" title="${esc(tip)}" data-tip="${esc(tip)}">${cls.toUpperCase()}</span>`;
     }).join('');
-    $('formCaption').textContent = `${d.wins}W ${d.draws}D ${d.losses}L over his last ${d.n} rated games.` +
+    $('formCaption').textContent = `${d.wins}W ${d.draws}D ${d.losses}L over the player's last ${d.n} rated games.` +
       (TOUCH ? ' Tap a square for the game.' : '');
   }
 
@@ -1482,7 +1526,7 @@
   function miniBoard(fen, color) {
     const rows = fen.split(' ')[0].split('/');
     const grid = rows.map(r => r.replace(/\d/g, d => '.'.repeat(+d)).split(''));
-    // his pieces at the bottom, the way he saw the board
+    // The player's pieces sit at the bottom, matching their viewing side.
     const ranks = color === 'black' ? [...grid].reverse().map(r => [...r].reverse()) : grid;
     let html = '';
     ranks.forEach((row, i) => row.forEach((ch, j) => {
@@ -1497,11 +1541,11 @@
   function patCard(a, kind) {
     const move = Math.max(1, Math.round(a.mean_ply / 2));
     const delta = Math.abs(a.points_lost).toFixed(1);
-    const swing = kind === 'weak' ? `loses <b>${delta}</b> points vs his average over these games`
-                                  : `gains <b>${delta}</b> points vs his average over these games`;
+    const swing = kind === 'weak' ? `scores <b>${delta}</b> points below their average over these games`
+                                  : `scores <b>${delta}</b> points above their average over these games`;
     const openings = (a.openings || []).map(([n, c]) => `${esc(n)} ×${c}`).join(' · ') || 'mixed openings';
     const real = Math.abs(a.z) >= 2;
-    const played = a.exemplar_move_san ? ` · he played <b>${esc(a.exemplar_move_san)}</b>` : '';
+    const played = a.exemplar_move_san ? ` · the player chose <b>${esc(a.exemplar_move_san)}</b>` : '';
     return `<div class="pat-card">
       ${miniBoard(a.exemplar_board_fen || a.exemplar_fen, a.exemplar_color)}
       <div class="pat-info">
@@ -1526,17 +1570,17 @@
       return;
     }
     const s = d.stats, p = d.predictability || {};
-    const guess = p.available ? ` · the network guesses his next move <b>${p.top1_pct}%</b> of the time on its first try` : '';
+    const guess = p.available ? ` · the network predicts their next move <b>${p.top1_pct}%</b> of the time on its first try` : '';
     $('patSummary').innerHTML =
       `<b>${d.games_analysed}</b> games · <b>${s.distinct_positions.toLocaleString()}</b> positions read by the network · ` +
-      `he scores <b>${d.baseline}%</b> overall${guess}`;
-    $('patCols').innerHTML = patCol('WHERE HE STRUGGLES', d.weaknesses, 'weak') + patCol('WHERE HE IS STRONGEST', d.strengths, 'strong');
+      `the player scores <b>${d.baseline}%</b> overall${guess}`;
+    $('patCols').innerHTML = patCol('WHERE THEY STRUGGLE', d.weaknesses, 'weak') + patCol('WHERE THEY ARE STRONGEST', d.strengths, 'strong');
     $('patFootnote').hidden = false;
     $('patFootnote').textContent =
-      `* his most recent ${d.window.max_games} games in the last ${d.window.months} months, ${d.window.tc.join('+')} only. ` +
-      `scores are pulled toward his average by ${d.params.prior_games} games of prior weight, so small groups have to earn it. ` +
+      `* the player's most recent ${d.window.max_games} games in the last ${d.window.months} months, ${d.window.tc.join('+')} only. ` +
+      `scores are pulled toward their average by ${d.params.prior_games} games of prior weight, so small groups have to earn it. ` +
       `groups with |z| under 2 are marked likely noise, because they were found in the same games they are scored on. ` +
-      `the board shows one typical position from each group, with his pieces at the bottom.`;
+      `the board shows one typical position from each group, with the player's pieces at the bottom.`;
   }
 
   $('perfLink').href = 'performance.html?' + src.toString();
