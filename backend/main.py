@@ -59,8 +59,10 @@ PAGE_CACHE_CONTROL = "public, no-cache"
 # Which header carries the real caller when a proxy sits in front. Leave unset
 # and the socket peer is used, which is correct for local runs. Only name a
 # header the proxy overwrites on every request: X-Forwarded-For is appended to,
-# so its leftmost entry is whatever the caller decided to send.
-CLIENT_IP_HEADER = os.getenv("CLIENT_IP_HEADER", "")
+# so its leftmost entry is whatever the caller decided to send. Vercel
+# overwrites X-Real-IP on every request to stop spoofing, so on Vercel that
+# header is the default. Without it every visitor would share one bucket.
+CLIENT_IP_HEADER = os.getenv("CLIENT_IP_HEADER", "x-real-ip" if os.getenv("VERCEL") else "")
 
 
 def _allowed_origins() -> list[str]:
