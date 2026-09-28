@@ -57,9 +57,19 @@ at the same games they are scored on, so treat anything under 2 as noise.
 
 All 922 games went through in about seven seconds on my laptop. His weakest cluster sits around move 16 and comes out of several different openings, which is exactly what the ECO tables can't connect. He drops about 14 points there compared with his average. Still, its z is only 1.6, so for Levy the honest answer is that nothing stands out yet. I made the tool say that out loud instead of dressing up noise as a finding.
 
-This part runs from the command line and not the website. I didn't want Torch in a deployed image that otherwise needs three packages.
+### On the website
 
-The quickest way to try it is with the encoder I already trained, which is attached to the [pos-v1 release](https://github.com/danish-puri/prepmate/releases/tag/pos-v1).
+Anyone can use it now, with nothing to install. Open a dossier and click the Patterns tab.
+
+<img src="docs/images/patterns.png" alt="The Patterns tab for Levy Rozman, with an example position on a small board next to each group, his score there, and the move he played">
+
+Each group shows one typical position on a board, with his pieces at the bottom, the move he played there, and how he scores from positions like it. Anything the numbers can't back up is marked as likely noise, same as on the command line. The tab also shows how often the network guesses his next move on its first try, which for Levy is 23%.
+
+Getting it onto the site took some work. The site runs on a small server with one shared CPU and 512 MB of memory, and Torch alone would fill that. The network is small, though, so I wrote its forward pass again in plain NumPy (`backend/patterns/npnet.py`). `train/export_numpy.py` folds each BatchNorm into the convolution in front of it and saves the weights to `backend/patterns/weights/pos-v1.npz`, and the site runs those with nothing but NumPy. On 2,000 random positions the two versions agreed to within 0.000003, and a test holds them to that. The site reads a player's most recent 300 games, runs one scout at a time so the server stays responsive, and serves repeat visits from the cache.
+
+### From the command line
+
+The quickest way is with the encoder I already trained, which is attached to the [pos-v1 release](https://github.com/danish-puri/prepmate/releases/tag/pos-v1).
 
 ```sh
 python -m pip install -r requirements-patterns.txt
@@ -75,7 +85,7 @@ python -m train.pretrain fetch --users train/users.txt --per-user 200 --out data
 python -m train.pretrain train --corpus data/corpus --out models/pos-v1.pt --device mps
 ```
 
-Without `--model` it falls back to handcrafted features. That keeps the pipeline testable, but the trained network is the real thing.
+Without `--model` it falls back to handcrafted features. That keeps the pipeline testable, but the trained network is the real thing. If you retrain, run `python -m train.export_numpy models/pos-v1.pt backend/patterns/weights/pos-v1.npz` so the website picks up the new weights.
 
 ## Running it
 
@@ -97,7 +107,7 @@ python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-The suite stubs every outside API, so it runs offline and never touches a real account. It covers the analysis, the adapters, the cache, every endpoint, the filters, the rate limits, the pages, and the pattern pipeline. The Torch tests run once `requirements-patterns.txt` is installed and are skipped otherwise.
+The suite stubs every outside API, so it runs offline and never touches a real account. It covers the analysis, the adapters, the cache, every endpoint, the filters, the rate limits, the pages, the pattern pipeline, and the NumPy network against reference outputs from the Torch model. The Torch tests run once `requirements-patterns.txt` is installed and are skipped otherwise.
 
 ## Settings
 
@@ -124,7 +134,7 @@ The live site runs on Fly.io from `fly.toml`. It's one always-on machine with a 
 | Path | What's in it |
 | --- | --- |
 | `backend/` | The API, the chess.com, lichess, and FIDE adapters, the analysis, the cache, and the rate limiter |
-| `backend/patterns/` | The position encoder, clustering, and the command-line scout |
+| `backend/patterns/` | The position encoder, its NumPy weights for the website, clustering, and the command-line scout |
 | `train/` | Pretraining the encoder on a public corpus |
 | `static/` | The web pages |
 | `tests/` | The offline test suite |

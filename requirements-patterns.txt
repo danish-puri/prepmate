@@ -1,7 +1,6 @@
-# Deep pattern detection (backend/patterns, train/). Kept out of
-# requirements.txt on purpose: the web app deploys without any of this, and
-# torch alone is larger than the rest of the image put together.
+# Training and the command-line torch encoder (train/, backend/patterns/net.py).
+# The website does not need any of this. It runs the same network in NumPy
+# from backend/patterns/weights/pos-v1.npz, because torch alone is larger than
+# the rest of the image put together.
 -r requirements.txt
-chess>=1.10
-numpy>=1.26
 torch>=2.2

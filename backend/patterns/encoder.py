@@ -182,8 +182,42 @@ class TorchEncoder:
         return np.concatenate(fs), np.concatenate(ts)
 
 
+class NumpyEncoder:
+    """The same frozen trunk, run in NumPy from the .npz that
+    train/export_numpy.py writes. This is what the website uses, since torch
+    does not fit on its server. It shares the torch encoder's name because the
+    two produce the same vectors, so they can share one embedding cache.
+    """
+
+    is_deep = True
+
+    def __init__(self, weights: str | None = None, batch_size: int = 256):
+        from .npnet import DEFAULT_WEIGHTS, NumpyNet
+
+        self.net = NumpyNet(weights or DEFAULT_WEIGHTS)
+        self.dim = self.net.dim
+        self.name = f"{self.net.name}-{self.net.fingerprint}"
+        self.batch_size = batch_size
+
+    def _batches(self, boards: list[chess.Board]):
+        for i in range(0, len(boards), self.batch_size):
+            yield planes_batch(boards[i: i + self.batch_size])
+
+    def encode(self, boards: list[chess.Board]) -> np.ndarray:
+        if not boards:
+            return np.zeros((0, self.dim), np.float32)
+        return np.concatenate([self.net.embed(x) for x in self._batches(boards)])
+
+    def policy_logits(self, boards: list[chess.Board]) -> tuple[np.ndarray, np.ndarray]:
+        fs, ts = zip(*(self.net.policy(x) for x in self._batches(boards)))
+        return np.concatenate(fs), np.concatenate(ts)
+
+
 def load(checkpoint: str | None = None, device: str = "cpu") -> Encoder:
-    """The deep encoder when a checkpoint is available, the fallback otherwise."""
+    """The deep encoder when a checkpoint is available, the fallback otherwise.
+    An .npz checkpoint runs in NumPy, anything else goes to torch."""
+    if checkpoint and checkpoint.endswith(".npz"):
+        return NumpyEncoder(checkpoint)
     if checkpoint:
         return TorchEncoder(checkpoint, device=device)
     return StructuralEncoder()
