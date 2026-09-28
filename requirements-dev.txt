@@ -1,5 +1,2 @@
 -r requirements.txt
 pytest>=8
-# Used by the non-Torch pattern tests. Torch stays optional because it is large.
-chess>=1.10
-numpy>=1.26

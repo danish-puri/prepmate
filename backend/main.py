@@ -6,6 +6,8 @@ Run from the project root:
 Also serves the static frontend (static/) at /.
 """
 
+import asyncio
+import hashlib
 import os
 import re
 from contextlib import asynccontextmanager
@@ -57,8 +59,10 @@ PAGE_CACHE_CONTROL = "public, no-cache"
 # Which header carries the real caller when a proxy sits in front. Leave unset
 # and the socket peer is used, which is correct for local runs. Only name a
 # header the proxy overwrites on every request: X-Forwarded-For is appended to,
-# so its leftmost entry is whatever the caller decided to send.
-CLIENT_IP_HEADER = os.getenv("CLIENT_IP_HEADER", "")
+# so its leftmost entry is whatever the caller decided to send. Vercel
+# overwrites X-Real-IP on every request to stop spoofing, so on Vercel that
+# header is the default. Without it every visitor would share one bucket.
+CLIENT_IP_HEADER = os.getenv("CLIENT_IP_HEADER", "x-real-ip" if os.getenv("VERCEL") else "")
 
 
 def _allowed_origins() -> list[str]:
@@ -369,6 +373,59 @@ async def openings(request: Request, chesscom_user: str | None = Query(default=N
         "params": {"min_games": analysis.MIN_GAMES, "threshold_pts": analysis.THRESHOLD_PTS,
                    "months": months, "max_games": max_games, "tc": sorted(classes)},
     }
+
+
+# The pattern engine is CPU bound and the server has one shared core, so one
+# scout runs at a time and the web version reads only the most recent games.
+# 300 matches the command line default and keeps a first run to seconds.
+PATTERN_MAX_GAMES = 300
+# part of every cache key, so bump it whenever the report changes shape or the
+# weights change, otherwise old reports keep being served
+PATTERN_REPORT_VERSION = 2
+_pattern_lock = asyncio.Lock()
+_pattern_encoder = None
+
+
+def _run_patterns(games) -> dict:
+    """Runs in a worker thread so a scout never blocks other requests.
+    numpy and python-chess are imported here, not at startup, so every other
+    endpoint pays nothing for them."""
+    global _pattern_encoder
+    from .patterns import encoder as encoders
+    from .patterns import pipeline
+
+    if _pattern_encoder is None:
+        _pattern_encoder = encoders.NumpyEncoder()
+    scout = pipeline.build(games, _pattern_encoder)
+    report = pipeline.report(scout, top=5)
+    report["predictability"] = pipeline.predictability(scout, _pattern_encoder)
+    return report
+
+
+@app.get("/api/patterns")
+async def patterns(request: Request, chesscom_user: str | None = Query(default=None, alias="chesscom"),
+                   lichess_user: str | None = Query(default=None, alias="lichess"),
+                   months: int = Query(default=6, ge=1, le=24),
+                   tc: str = Query(default=DEFAULT_TC)):
+    classes = _parse_tc(tc)
+    games, coverage = await _fetch_games(request, chesscom_user, lichess_user, months, PATTERN_MAX_GAMES,
+                                         time_classes=classes)
+    games = sorted((g for g in games if g.moves), key=lambda g: g.end_time, reverse=True)[:PATTERN_MAX_GAMES]
+
+    # keyed by the exact games analysed, so a new game means a fresh scout and
+    # an unchanged history is answered straight from the cache
+    ids = "|".join(f"{g.platform}:{g.end_time}:{g.color}:{len(g.moves)}" for g in games)
+    key = f"patterns:v{PATTERN_REPORT_VERSION}:" + hashlib.sha256(ids.encode()).hexdigest()
+    report = cache.get(key)
+    if report is None:
+        async with _pattern_lock:
+            report = cache.get(key)
+            if report is None:
+                report = await asyncio.to_thread(_run_patterns, games)
+                cache.put(key, report)
+
+    return {**report, "games_analysed": len(games), "coverage": coverage,
+            "window": {"months": months, "max_games": PATTERN_MAX_GAMES, "tc": sorted(classes)}}
 
 
 @app.get("/api/movetree")

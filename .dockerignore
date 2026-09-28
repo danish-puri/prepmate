@@ -13,4 +13,3 @@
 **/*.db
 **/*.db-*
 **/*.sqlite*
-backend/patterns/

@@ -711,6 +711,36 @@
     .chip:nth-child(3) { grid-column: 1 / -1; }
     .name-row h1 { font-size: 24px; line-height: 28px; }
   }
+
+  /* ---- patterns ---- */
+  .pat-summary { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted); padding-top: 18px; line-height: 1.7; }
+  .pat-summary b { color: var(--text); font-weight: 600; }
+  .pat-col-label { font-weight: 800; font-size: 15px; letter-spacing: 0.02em; margin-bottom: 14px; }
+  .pat-card { display: flex; gap: 16px; padding: 16px 0; border-top: 1px solid var(--hairline-dim); }
+  .pat-col-label + .pat-card { border-top: 0; }
+  .mini-board { display: grid; grid-template-columns: repeat(8, 1fr); width: 176px; height: 176px; flex: 0 0 176px;
+    border: 1px solid var(--hairline); }
+  .mini-board span { display: flex; align-items: center; justify-content: center; font-size: 17px; line-height: 1;
+    font-family: 'DejaVu Sans', 'Segoe UI Symbol', 'Noto Sans Symbols 2', sans-serif; }
+  .mini-board .l { background: #8FA894; }
+  .mini-board .d { background: #4E6853; }
+  .mini-board .pw { color: #FFFFFF; text-shadow: 0 0 1px #000, 0 0 2px #000; }
+  .mini-board .pb { color: #0A0F0A; text-shadow: 0 0 1px rgba(255,255,255,0.35); }
+  .pat-info { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .pat-score { font-weight: 800; font-size: 26px; line-height: 1; }
+  .pat-score.bad { color: var(--red); }
+  .pat-score.good { color: var(--phosphor); }
+  .pat-score small { font-family: 'IBM Plex Mono', monospace; font-weight: 400; font-size: 11px; color: var(--dim); margin-left: 6px; }
+  .pat-line { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted); line-height: 1.6; }
+  .pat-line b { color: var(--body); font-weight: 600; }
+  .pat-tag { align-self: flex-start; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.08em;
+    padding: 2px 6px; border: 1px solid var(--hairline); color: var(--faint); }
+  .pat-tag.real { border-color: var(--phosphor); color: var(--phosphor); }
+  @media (max-width: 520px) {
+    .pat-card { flex-direction: column; }
+    .mini-board { width: 224px; height: 224px; flex-basis: 224px; }
+    .mini-board span { font-size: 22px; }
+  }
 </style>
 </head>
 <body>
@@ -751,6 +781,7 @@
   <div class="tabbar">
     <div class="tabs" role="tablist">
       <button class="tab active" data-panel="openings" role="tab">OPENINGS</button>
+      <button class="tab" data-panel="patterns" role="tab">PATTERNS</button>
       <button class="tab" data-panel="repertoire" role="tab">REPERTOIRE</button>
       <button class="tab" data-panel="performance" role="tab">PERFORMANCE</button>
       <button class="tab" data-panel="ratings" role="tab">RATINGS</button>
@@ -777,6 +808,24 @@
       </div>
     </section>
     <p class="footnote" id="openingsFootnote" hidden></p>
+  </div>
+
+  <!-- ================= PATTERNS ================= -->
+  <div class="panel" id="patterns">
+    <section>
+      <div class="section-head"><h3>PATTERNS</h3><span class="hint">positions, not openings. a pretrained neural network groups the positions he reached, then each group is scored by how he did from there</span></div>
+      <p class="pat-summary" id="patSummary"></p>
+      <div class="col-view" style="padding-top: 24px;">
+        <div class="colswitch" data-for="patCols">
+          <button type="button" class="on" data-i="0">STRUGGLES</button>
+          <button type="button" data-i="1">STRONGEST</button>
+        </div>
+        <div class="two-col" id="patCols" data-col="0">
+          <p class="loading">reading his games with the neural network. the first scout takes about ten seconds, repeat visits are instant…</p>
+        </div>
+      </div>
+    </section>
+    <p class="footnote" id="patFootnote" hidden></p>
   </div>
 
   <!-- ================= REPERTOIRE ================= -->
@@ -881,6 +930,7 @@
     // a hidden panel measures 0 wide, so the chart can only size itself once
     // its tab is on screen
     if (name === 'ratings') requestAnimationFrame(() => drawChart());
+    if (name === 'patterns') loadPatternsOnce();
   }
   const tabbar = document.querySelector('.tabbar');
   tabs.forEach(tab => tab.addEventListener('click', () => {
@@ -912,6 +962,23 @@
     if (!sw) return;
     sw.querySelector(`button[data-i="${colour === 'black' ? 1 : 0}"]`).click();
   }
+  // ---- patterns: only scouted when someone opens the tab, since it is the one
+  // expensive endpoint and most visits never look at it ----
+  let patternsRequested = false;
+  function loadPatternsOnce() {
+    if (patternsRequested) return;
+    patternsRequested = true;
+    if (!cc && !li) {
+      $('patCols').innerHTML = '<p class="loading">patterns need chess.com or lichess games. FIDE publishes ratings and results, not game moves.</p>';
+      return;
+    }
+    guard(loadPatterns().catch(err => {
+      $('patCols').innerHTML = '<p class="loading">the pattern scout failed. try again in a minute.</p>';
+      throw err;
+    }));
+  }
+  // the page loads before the helpers below exist, so a deep link to
+  // #patterns is honoured once everything is defined (see the end of the script)
   if (['openings', 'repertoire', 'performance', 'ratings', 'recent'].includes(location.hash.slice(1))) {
     activate(location.hash.slice(1));
   }
@@ -967,6 +1034,10 @@
     guard(loadRepertoire());
     guard(loadPerformance());
     guard(loadRecent());
+    if (patternsRequested) {
+      $('patCols').innerHTML = '<p class="loading">re-scouting with tc = ' + tcParam() + '…</p>';
+      guard(loadPatterns());
+    }
   }));
 
   function coverageLine(cov) {
@@ -1406,6 +1477,68 @@
     addEventListener('scroll', hidePop, { passive: true, capture: true });
   }
 
+  // ---- patterns ----
+  const GLYPH = { k: '\u265A', q: '\u265B', r: '\u265C', b: '\u265D', n: '\u265E', p: '\u265F' };
+  function miniBoard(fen, color) {
+    const rows = fen.split(' ')[0].split('/');
+    const grid = rows.map(r => r.replace(/\d/g, d => '.'.repeat(+d)).split(''));
+    // his pieces at the bottom, the way he saw the board
+    const ranks = color === 'black' ? [...grid].reverse().map(r => [...r].reverse()) : grid;
+    let html = '';
+    ranks.forEach((row, i) => row.forEach((ch, j) => {
+      const sq = (i + j) % 2 ? 'd' : 'l';
+      if (ch === '.') { html += `<span class="${sq}"></span>`; return; }
+      const side = ch === ch.toUpperCase() ? 'pw' : 'pb';
+      html += `<span class="${sq} ${side}">${GLYPH[ch.toLowerCase()]}\uFE0E</span>`;
+    }));
+    return `<div class="mini-board" role="img" aria-label="example position">${html}</div>`;
+  }
+
+  function patCard(a, kind) {
+    const move = Math.max(1, Math.round(a.mean_ply / 2));
+    const delta = Math.abs(a.points_lost).toFixed(1);
+    const swing = kind === 'weak' ? `loses <b>${delta}</b> points vs his average over these games`
+                                  : `gains <b>${delta}</b> points vs his average over these games`;
+    const openings = (a.openings || []).map(([n, c]) => `${esc(n)} ×${c}`).join(' · ') || 'mixed openings';
+    const real = Math.abs(a.z) >= 2;
+    const played = a.exemplar_move_san ? ` · he played <b>${esc(a.exemplar_move_san)}</b>` : '';
+    return `<div class="pat-card">
+      ${miniBoard(a.exemplar_board_fen || a.exemplar_fen, a.exemplar_color)}
+      <div class="pat-info">
+        <div class="pat-score ${kind === 'weak' ? 'bad' : 'good'}">${pct(a.shrunk)}<small>raw ${pct(a.score)} · n=${a.games}</small></div>
+        <div class="pat-line">${swing}</div>
+        <div class="pat-line">around move <b>${move}</b> · ${Math.round(a.mean_pieces)} pieces · as ${esc(a.exemplar_color)}${played}</div>
+        <div class="pat-line">reached from ${openings}</div>
+        <span class="pat-tag${real ? ' real' : ''}">${real ? 'STANDS OUT' : 'LIKELY NOISE'} · z=${a.z.toFixed(2)}</span>
+      </div>
+    </div>`;
+  }
+
+  function patCol(label, rows, kind) {
+    const body = rows.length ? rows.map(a => patCard(a, kind)).join('') : '<p class="loading">not enough games to group</p>';
+    return `<div class="col"><div class="pat-col-label">${label}</div>${body}</div>`;
+  }
+
+  async function loadPatterns() {
+    const d = await getJSON(`/api/patterns?${src}&tc=${tcParam()}`);
+    if (d.baseline === null) {
+      $('patCols').innerHTML = '<p class="loading">no games with moves in this window, so there is nothing to group</p>';
+      return;
+    }
+    const s = d.stats, p = d.predictability || {};
+    const guess = p.available ? ` · the network guesses his next move <b>${p.top1_pct}%</b> of the time on its first try` : '';
+    $('patSummary').innerHTML =
+      `<b>${d.games_analysed}</b> games · <b>${s.distinct_positions.toLocaleString()}</b> positions read by the network · ` +
+      `he scores <b>${d.baseline}%</b> overall${guess}`;
+    $('patCols').innerHTML = patCol('WHERE HE STRUGGLES', d.weaknesses, 'weak') + patCol('WHERE HE IS STRONGEST', d.strengths, 'strong');
+    $('patFootnote').hidden = false;
+    $('patFootnote').textContent =
+      `* his most recent ${d.window.max_games} games in the last ${d.window.months} months, ${d.window.tc.join('+')} only. ` +
+      `scores are pulled toward his average by ${d.params.prior_games} games of prior weight, so small groups have to earn it. ` +
+      `groups with |z| under 2 are marked likely noise, because they were found in the same games they are scored on. ` +
+      `the board shows one typical position from each group, with his pieces at the bottom.`;
+  }
+
   $('perfLink').href = 'performance.html?' + src.toString();
 
   // ---- refresh ----
@@ -1414,6 +1547,8 @@
     try { await fetch(`${API}/api/refresh?${src}`, { method: 'POST' }); } catch {}
     location.reload();
   });
+
+  if (location.hash.slice(1) === 'patterns') activate('patterns');
 
   // ---- kick everything off in parallel ----
   if (cc || li || fideId) {

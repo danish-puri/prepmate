@@ -22,6 +22,7 @@ Three things come out:
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
+import chess
 import numpy as np
 
 from ..models import Game
@@ -55,6 +56,11 @@ class Archetype:
     mean_pieces: float
     exemplar_fen: str
     openings: list[tuple[str, int]] = field(default_factory=list)
+    # the exemplar as it stood in the real game, for showing a person: the
+    # player's actual colour, the board un-mirrored, and the move they chose
+    exemplar_color: str = "white"
+    exemplar_board_fen: str = ""
+    exemplar_move_san: str = ""
 
 
 def choose_k(n: int) -> int:
@@ -153,6 +159,15 @@ def archetypes(decisions: list[Decision], vectors: np.ndarray, games: list[Game]
         members = np.flatnonzero(labels == j)
         exemplar = members[(vectors[members] @ centers[j]).argmax()]
         counts = Counter(games[i].opening for i in game_ids if games[i].opening)
+        ex = decisions[exemplar]
+        color = games[ex.game].color
+        real = chess.Board(fens[ex.key])
+        if color == "black":
+            real = real.mirror()
+        try:
+            san = real.san(chess.Move.from_uci(ex.move))
+        except ValueError:
+            san = ""
 
         out.append(Archetype(
             cluster=j, positions=len(members), games=n,
@@ -169,6 +184,7 @@ def archetypes(decisions: list[Decision], vectors: np.ndarray, games: list[Game]
                 [_piece_count(fens[decisions[i].key]) for i in members])), 1),
             exemplar_fen=fens[decisions[exemplar].key],
             openings=counts.most_common(3),
+            exemplar_color=color, exemplar_board_fen=real.fen(), exemplar_move_san=san,
         ))
     return sorted(out, key=lambda a: -a.points_lost)
 

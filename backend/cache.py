@@ -11,10 +11,16 @@ import sqlite3
 import time
 from pathlib import Path
 
-# Deployed instances point CACHE_DB at a mounted volume, otherwise the cache
-# would be inside the image and every redeploy would start cold. Locally it
-# sits next to this module.
-DB_PATH = Path(os.getenv("CACHE_DB") or Path(__file__).parent / "cache.db")
+# Locally the cache sits next to this module. On Vercel the project directory
+# is read-only and only /tmp can be written, so the cache lives there and lasts
+# as long as the function instance stays warm. CACHE_DB overrides both.
+def _default_path() -> Path:
+    if os.getenv("VERCEL"):
+        return Path("/tmp/prepmate-cache.db")
+    return Path(__file__).parent / "cache.db"
+
+
+DB_PATH = Path(os.getenv("CACHE_DB") or _default_path())
 
 
 def _conn() -> sqlite3.Connection:

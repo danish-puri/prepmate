@@ -1,0 +1,17 @@
+# Vercel requires project metadata to create its uv lockfile. Keep these
+# runtime dependencies aligned with requirements.txt for local installs.
+[project]
+name = "prepmate"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+    "numpy>=1.26",
+    "chess>=1.10",
+]
+
+# This setting points Vercel to the existing FastAPI application.
+[tool.vercel]
+entrypoint = "backend.main:app"
