@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "app.py": {
+    "backend/main.py": {
       "excludeFiles": "{tests/**,docs/**,train/**,data/**,models/**,webapp/**,sales/**,**/__pycache__/**,Dockerfile,railway.json}"
     }
   }

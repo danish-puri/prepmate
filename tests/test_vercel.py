@@ -25,6 +25,9 @@ def test_rate_limit_keys_on_x_real_ip_on_vercel(monkeypatch):
         importlib.reload(main)
 
 
-def test_root_entrypoint_is_the_real_app():
-    import app as entry
-    assert entry.app is main.app
+def test_vercel_entrypoint_points_at_the_real_app():
+    import tomllib
+    root = Path(__file__).parent.parent
+    entry = tomllib.loads((root / "pyproject.toml").read_text())["tool"]["vercel"]["entrypoint"]
+    module, name = entry.split(":")
+    assert getattr(importlib.import_module(module), name) is main.app

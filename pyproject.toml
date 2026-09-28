@@ -1,0 +1,4 @@
+# Only tells Vercel where the app is. Dependencies stay in requirements.txt and
+# the Python version in .python-version.
+[tool.vercel]
+entrypoint = "backend.main:app"

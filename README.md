@@ -127,7 +127,7 @@ Every API call fans out to chess.com and lichess under PrepMate's User-Agent. Th
 
 ## Deployment
 
-The live site runs on Vercel, which builds it straight from this repository. Every push to `main` deploys, and every pull request gets its own preview link. Vercel finds the app through `app.py`, reads the Python version from `.python-version`, and installs `requirements.txt`. `vercel.json` keeps tests, docs, and training code out of the function.
+The live site runs on Vercel, which builds it straight from this repository. Every push to `main` deploys, and every pull request gets its own preview link. `pyproject.toml` tells Vercel where the app is, `.python-version` sets Python, and Vercel installs `requirements.txt`. `vercel.json` keeps tests, docs, and training code out of the function.
 
 Vercel has no permanent disk, so the SQLite cache lives in `/tmp` and resets when an instance goes cold. That means a first visit after a quiet spell downloads the games again. The Dockerfile still works on any host with a real disk, such as Railway through `railway.json` and `.env.railway.example`, which holds settings only, never credentials.
 
